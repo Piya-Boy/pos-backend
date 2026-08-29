@@ -19,11 +19,13 @@ pick next unchecked task in roadmap.md
             6. run lint + full suite ── fail ──> fix, go to 3
             7. commit (Conventional Commit)
             8. tick the task ⬜→✅ in THIS repo's PROGRESS.md, commit that
-       └─ go pick next task
-stop only when: every task in this repo's PROGRESS.md is ✅, OR you hit a BLOCKER (see §6).
+       └─ go pick next task (next phase when a phase's tasks are all ✅)
+stop only when: every non-opt-in task in this repo's PROGRESS.md is ✅ (Phase 1→3 for frontend, Phase 2→3 for backend; Phase 5 is opt-in — skip unless told), OR you hit a BLOCKER (see §6).
 ```
 
 **Never ask the human between tasks. Just proceed to the next.** Only stop for a real BLOCKER (§6).
+
+**Do NOT pause to report progress.** A task finishing, tests going green, "should I continue?", a status summary — none are stopping points. The moment a task commits + its `PROGRESS.md` line is ticked, start the next task in the same run, silently. Hand control back ONLY when (1) every task is ✅, or (2) a real BLOCKER. Unsure if it's a blocker? It isn't — keep going.
 
 ---
 
@@ -32,8 +34,11 @@ stop only when: every task in this repo's PROGRESS.md is ✅, OR you hit a BLOCK
 | File | Use it for |
 |---|---|
 | `roadmap.md` | Task list + status. **Source of "what's next".** Tick tasks here. |
-| `plan.md` | Frontend implementation plan (Flutter). Per-task TDD steps with real code. |
-| `plan-back.md` | Backend implementation plan (Laravel). Per-task TDD steps with real code. |
+| `plan.md` | Phase 1 — customer UI plan (Flutter). Per-task TDD steps with real code. |
+| `plan-back.md` | Phase 2 — backend plan (Laravel). Per-task TDD steps with real code. |
+| `plan-integ.md` | Phase 3 — integration (HttpApiClient + CORS + E2E). |
+| `plan-staff.md` | Phase 4 — staff & admin UI plan (Flutter). |
+| `plan-enhance.md` | Phase 5 — enhancements (realtime/offline/upload/PDF), opt-in only. |
 | `front.md` | Frontend spec. Referenced by `plan.md` via §numbers. |
 | `back.md` | Backend spec. Referenced by `plan-back.md` via §numbers. |
 | `test.md` | Testing standard + coverage matrix + extra gaps to cover. |
