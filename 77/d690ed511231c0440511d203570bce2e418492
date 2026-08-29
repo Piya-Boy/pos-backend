@@ -1,0 +1,21 @@
+.gitignore
+  s_ac235bdd8b9dc7::t_b6f1cb8d74198b 20
+  s_ac235bdd8b9dc7::t_0ba97459b3d512 17-19
+  s_ac235bdd8b9dc7::t_52973ba6640936 21-23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "77d690ed511231c0440511d203570bce2e418492",
+  "prompts": {},
+  "sessions": {
+    "s_ac235bdd8b9dc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0ee4f32-2778-42a1-bf1d-2bd3d8ba1620",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Piya Miang-lae <piyaboy097@gmail.com>"
+    }
+  }
+}
