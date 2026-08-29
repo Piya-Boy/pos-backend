@@ -1,0 +1,14 @@
+prompt-backend.md
+  h_f820d1ed52287e 1-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "c556e014aab5e24cf6cc5c92246e46a28cb0b1ab",
+  "prompts": {},
+  "humans": {
+    "h_f820d1ed52287e": {
+      "author": "Piya Miang-lae <piyaboy097@gmail.com>"
+    }
+  }
+}
