@@ -1,0 +1,57 @@
+PROGRESS.md
+  s_ac235bdd8b9dc7::t_28e159d2f397fd 1-25
+AGENTS.md
+  s_ac235bdd8b9dc7::t_a4711e5917a2d5 1-191
+back.md
+  s_ac235bdd8b9dc7::t_5fd93df06c70c8 1-251
+cp-pos/.clasp.json
+  s_ac235bdd8b9dc7::t_e961ae34672363 1-16
+cp-pos/Admin.js
+  s_ac235bdd8b9dc7::t_7a1935f78c5ff0 1-490
+cp-pos/AdminUI.html
+  s_ac235bdd8b9dc7::t_d0d5fcec3a364a 1-33
+cp-pos/App.html
+  s_ac235bdd8b9dc7::t_4ed7c9a5c5459b 1-1313
+cp-pos/Code.js
+  s_ac235bdd8b9dc7::t_fd27c7e67d4ab7 1-222
+cp-pos/Database.js
+  s_ac235bdd8b9dc7::t_1920dc0ab7d66e 1-433
+cp-pos/Index.html
+  s_ac235bdd8b9dc7::t_b2981df3e557c9 1-44
+cp-pos/Integration.js
+  s_ac235bdd8b9dc7::t_d104fe3d524f31 1-63
+cp-pos/Pages.html
+  s_ac235bdd8b9dc7::t_eb4cbe583fb71e 1-137
+cp-pos/PdfService.js
+  s_ac235bdd8b9dc7::t_c19b8a5a66624f 1-77
+cp-pos/Services.js
+  s_ac235bdd8b9dc7::t_d6c7d4af140e6a 1-427
+cp-pos/Styles.html
+  s_ac235bdd8b9dc7::t_39e1f8f5a9e173 1-411
+cp-pos/appsscript.json
+  s_ac235bdd8b9dc7::t_297757a55254cc 1-16
+plan-back.md
+  s_ac235bdd8b9dc7::t_b6ac3d8c346263 1-1081
+roadmap.md
+  s_ac235bdd8b9dc7::t_11a9ed61fa3d47 1-153
+security.md
+  s_ac235bdd8b9dc7::t_8dfe62b7e1779f 1-126
+test.md
+  s_ac235bdd8b9dc7::t_d706312cb06e0d 1-148
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "a6d7bdd5d3a9cd763db8dc5e217035da5954e424",
+  "prompts": {},
+  "sessions": {
+    "s_ac235bdd8b9dc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0ee4f32-2778-42a1-bf1d-2bd3d8ba1620",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Piya Miang-lae <piyaboy097@gmail.com>"
+    }
+  }
+}
