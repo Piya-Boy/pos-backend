@@ -1,0 +1,1313 @@
+<script>
+(() => {
+  'use strict';
+
+  const config = window.__APP_CONFIG__ || {};
+  const appRoot = document.getElementById('app');
+  const modalRoot = document.getElementById('modal-root');
+  const statusCapsule = document.getElementById('status-capsule');
+  const networkBanner = document.getElementById('network-banner');
+  const route = String(config.page || new URLSearchParams(location.search).get('page') || 'home').toLowerCase();
+  const tableToken = String(config.tableToken || new URLSearchParams(location.search).get('table') || '');
+  const state = {
+    route,
+    tableToken,
+    app: null,
+    customer: null,
+    cart: [],
+    activeCategory: 'ALL',
+    search: '',
+    promoCode: '',
+    checkoutKey: '',
+    authToken: sessionStorage.getItem(`phius-auth-${route}`) || sessionStorage.getItem('phius-auth-admin') || '',
+    user: null,
+    ops: null,
+    admin: null,
+    adminTab: 'overview',
+    opsTab: 'kitchen',
+    paymentComplete: false,
+    pollTimer: null,
+    toastTimer: null,
+    submitting: false
+  };
+
+  const roleMeta = {
+    kitchen: { expectedRole: 'KITCHEN', icon: '🔥', title: 'หน้าครัว', description: 'รับออเดอร์และอัปเดตสถานะการปรุง', kicker: 'Kitchen Display System' },
+    staff: { expectedRole: 'STAFF', icon: '🛎️', title: 'พนักงานเสิร์ฟ', description: 'จัดการอาหารพร้อมเสิร์ฟและงานเรียกจากโต๊ะ', kicker: 'Service Queue' },
+    cashier: { expectedRole: 'CASHIER', icon: '🧾', title: 'แคชเชียร์', description: 'ตรวจสอบบิล รับชำระ และปิดโต๊ะ', kicker: 'Billing & Checkout' },
+    operations: { expectedRole: 'ADMIN', dashboardView: 'ALL', icon: '🧭', title: 'รวมงานหน้าร้าน', description: 'ดูงานครัว พนักงาน และแคชเชียร์ในหน้าเดียว', kicker: 'Small Team Operations' },
+    admin: { expectedRole: 'ADMIN', icon: '⚙️', title: 'ผู้ดูแลระบบ', description: 'จัดการโต๊ะ เมนู โปรโมชั่น และพนักงาน', kicker: 'Admin Console' }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, { once: true });
+  } else {
+    init();
+  }
+  window.addEventListener('online', updateNetworkState);
+  window.addEventListener('offline', updateNetworkState);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopPolling();
+    else startPolling();
+  });
+
+  async function init() {
+    updateNetworkState();
+    appRoot.addEventListener('click', handleAppClick);
+    modalRoot.addEventListener('click', handleModalClick);
+    appRoot.addEventListener('submit', handleAppSubmit);
+    modalRoot.addEventListener('submit', handleModalSubmit);
+    registerServiceWorker();
+    try {
+      const bootstrap = await api('getPublicBootstrap', { tableToken: route === 'order' ? tableToken : '' }, { timeoutMs: 20000 });
+      if (bootstrap.setupRequired) {
+        mountTemplate('tpl-setup-required');
+        return;
+      }
+      state.app = bootstrap.app || {};
+      applyBrand();
+      if (route === 'order') {
+        if (!tableToken) throw appError('TABLE_REQUIRED', 'กรุณาสแกน QR ที่โต๊ะเพื่อเปิดเมนู');
+        state.customer = bootstrap.customer;
+        loadCart();
+        renderCustomer();
+        if (!state.customer.session && sessionStorage.getItem(sessionKey())) await refreshCustomerStatus();
+        startPolling();
+      } else if (roleMeta[route]) {
+        if (state.authToken) await loadProtectedRoute();
+        else renderLogin();
+      } else {
+        renderHome();
+      }
+    } catch (error) {
+      renderFatalError(error);
+    }
+  }
+
+  function api(method, payload, options = {}) {
+    return new Promise((resolve, reject) => {
+      if (!window.google || !google.script || !google.script.run) {
+        reject(appError('CONNECTION_ERROR', 'ไม่พบการเชื่อมต่อกับ Apps Script'));
+        return;
+      }
+
+      let settled = false;
+      let timeoutId = null;
+      const finish = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        if (timeoutId) clearTimeout(timeoutId);
+        callback(value);
+      };
+      if (number(options.timeoutMs) > 0) {
+        timeoutId = setTimeout(() => {
+          finish(reject, appError('REQUEST_TIMEOUT', 'ระบบใช้เวลาตอบกลับนานเกินไป กรุณาลองใหม่'));
+        }, number(options.timeoutMs));
+      }
+
+      google.script.run
+        .withSuccessHandler(raw => {
+          let response = raw;
+          try { if (typeof raw === 'string') response = JSON.parse(raw); }
+          catch (error) { finish(reject, appError('INVALID_RESPONSE', 'ระบบตอบกลับไม่สมบูรณ์')); return; }
+          if (!response || response.ok !== true) {
+            const detail = response && response.error ? response.error : {};
+            finish(reject, appError(detail.code || 'REQUEST_FAILED', detail.message || 'ทำรายการไม่สำเร็จ', detail.details));
+            return;
+          }
+          finish(resolve, response.data);
+        })
+        .withFailureHandler(error => finish(reject, appError('CONNECTION_ERROR', error && error.message ? error.message : 'เชื่อมต่อระบบไม่สำเร็จ')))
+        [method](JSON.stringify(payload || {}));
+    });
+  }
+
+  function appError(code, message, details) {
+    const error = new Error(message);
+    error.code = code;
+    error.details = details || null;
+    return error;
+  }
+
+  function mountTemplate(id) {
+    const template = document.getElementById(id);
+    if (!template) throw new Error(`Missing template: ${id}`);
+    appRoot.replaceChildren(template.content.cloneNode(true));
+    bindAppLinks();
+    applyBrand(appRoot);
+  }
+
+  function bindAppLinks(root = appRoot) {
+    root.querySelectorAll('[data-app-page]').forEach(link => {
+      link.href = appPageUrl(link.dataset.appPage);
+      link.target = '_top';
+    });
+  }
+
+  function appPageUrl(page) {
+    const base = String(config.appUrl || '').trim();
+    if (!base) return '#';
+    const url = new URL(base);
+    url.search = '';
+    url.hash = '';
+    url.searchParams.set('page', String(page || 'home'));
+    return url.toString();
+  }
+
+  function bindText(name, value, root = appRoot) {
+    root.querySelectorAll(`[data-bind="${name}"]`).forEach(node => { node.textContent = value == null ? '' : value; });
+  }
+
+  function applyBrand(root = document) {
+    const app = state.app || {};
+    const primary = safeHexColor(app.primaryColor, '#B7442B');
+    const success = safeHexColor(app.successColor, '#2F6B4F');
+    const background = safeHexColor(app.backgroundColor, '#FBF7F0');
+    const surface = safeHexColor(app.surfaceColor, '#FFFFFF');
+    const textColor = safeHexColor(app.textColor, '#211E1B');
+    document.documentElement.style.setProperty('--bg', background);
+    document.documentElement.style.setProperty('--surface', surface);
+    document.documentElement.style.setProperty('--surface-soft', mixHexColor(surface, background, .58));
+    document.documentElement.style.setProperty('--ink', textColor);
+    document.documentElement.style.setProperty('--muted', mixHexColor(textColor, background, .48));
+    document.documentElement.style.setProperty('--border', mixHexColor(textColor, background, .84));
+    document.documentElement.style.setProperty('--primary', primary);
+    document.documentElement.style.setProperty('--primary-dark', mixHexColor(primary, '#000000', .22));
+    document.documentElement.style.setProperty('--primary-light', mixHexColor(primary, '#FFFFFF', .34));
+    document.documentElement.style.setProperty('--red-soft', mixHexColor(primary, '#FFFFFF', .86));
+    document.documentElement.style.setProperty('--green', success);
+    document.documentElement.style.setProperty('--green-soft', mixHexColor(success, '#FFFFFF', .86));
+    document.title = app.appName || config.name || 'Phius Order';
+    bindText('app-name', app.appName || config.name || 'Phius Order', root);
+    root.querySelectorAll('[data-brand-mark]').forEach(mark => renderBrandMark(mark, app.logoUrl, app.logoText));
+  }
+
+  function renderBrandMark(mark, logoUrl, logoText) {
+    mark.classList.toggle('has-image', Boolean(logoUrl));
+    if (!logoUrl) {
+      mark.textContent = logoText || 'ผ';
+      return;
+    }
+    const image = document.createElement('img');
+    image.src = logoUrl;
+    image.alt = '';
+    image.loading = 'eager';
+    image.addEventListener('error', () => {
+      mark.classList.remove('has-image');
+      mark.textContent = logoText || 'ผ';
+    }, { once: true });
+    mark.replaceChildren(image);
+  }
+
+  function renderHome() {
+    mountTemplate('tpl-home');
+    bindText('app-name', state.app.appName || config.name || 'Phius Order');
+    bindText('restaurant-name', state.app.restaurantName || state.app.name || 'Phius Thai Kitchen');
+    bindText('tagline', state.app.tagline || 'ระบบสั่งอาหารและจัดการหน้าร้าน');
+  }
+
+  function renderLogin() {
+    const meta = roleMeta[route];
+    mountTemplate('tpl-login');
+    bindText('role-icon', meta.icon);
+    bindText('role-kicker', meta.kicker);
+    bindText('role-title', meta.title);
+    bindText('role-description', meta.description);
+    requestAnimationFrame(() => document.getElementById('login-pin')?.focus());
+  }
+
+  async function handleAppSubmit(event) {
+    if (event.target.id === 'login-form') {
+      event.preventDefault();
+      const button = event.target.querySelector('button[type="submit"]');
+      const pin = document.getElementById('login-pin').value;
+      await withButton(button, 'กำลังตรวจสอบ PIN...', async () => {
+        const result = await api('loginStaff', { pin, expectedRole: roleMeta[route].expectedRole });
+        state.authToken = result.token;
+        state.user = result.user;
+        sessionStorage.setItem(`phius-auth-${route}`, result.token);
+        if (result.user?.role === 'ADMIN') sessionStorage.setItem('phius-auth-admin', result.token);
+        notify('เข้าสู่ระบบแล้ว', 'success');
+        await loadProtectedRoute();
+      }).catch(showError);
+    }
+    if (event.target.id === 'admin-settings-form') {
+      event.preventDefault();
+      const button = event.target.querySelector('button[type="submit"]');
+      const form = event.target;
+      const formData = new FormData(form);
+      await withButton(button, 'กำลังบันทึกภาพและการตั้งค่า...', async () => {
+        const logoFile = form.querySelector('[name="BrandLogoFile"]')?.files?.[0];
+        const heroFile = form.querySelector('[name="HeroBadgeImageFile"]')?.files?.[0];
+        const uploads = await Promise.all([
+          logoFile ? uploadBrandAsset(logoFile) : Promise.resolve(null),
+          heroFile ? uploadBrandAsset(heroFile) : Promise.resolve(null)
+        ]);
+        if (uploads[0]) formData.set('BrandLogoURL', uploads[0].url);
+        if (uploads[1]) formData.set('HeroBadgeImageURL', uploads[1].url);
+        const settings = {};
+        for (const [key, value] of formData.entries()) {
+          if (!(value instanceof File)) settings[key] = value;
+        }
+        const result = await api('adminSaveSettings', { token: state.authToken, settings });
+        state.admin.settings = result.settings;
+        syncAppBrandFromSettings(result.settings);
+        applyBrand();
+        renderAdminSettings(document.getElementById('admin-content'));
+        startPolling();
+        notify('บันทึกชื่อ โลโก้ สี และหน้าตาแล้ว', 'success');
+      }).catch(showError);
+    }
+  }
+
+  async function uploadBrandAsset(file) {
+    const dataUrl = await compressImage(file);
+    return api('uploadMenuImage', { token: state.authToken, filename: file.name, dataUrl });
+  }
+
+  function syncAppBrandFromSettings(settings) {
+    state.app = {
+      ...(state.app || {}),
+      appName: settings.AppName || 'Phius Order',
+      name: settings.RestaurantName || 'Phius Thai Kitchen',
+      restaurantName: settings.RestaurantName || 'Phius Thai Kitchen',
+      tagline: settings.RestaurantTagline || '',
+      logoText: settings.BrandLogoText || 'ผ',
+      logoUrl: settings.BrandLogoURL || '',
+      primaryColor: settings.PrimaryColor || '#B7442B',
+      successColor: settings.SuccessColor || '#2F6B4F',
+      backgroundColor: settings.BackgroundColor || '#FBF7F0',
+      surfaceColor: settings.SurfaceColor || '#FFFFFF',
+      textColor: settings.TextColor || '#211E1B',
+      heroKicker: settings.HeroKicker || '',
+      heroTitle: settings.HeroTitle || '',
+      heroBadgeText: settings.HeroBadgeText || '',
+      heroBadgeImageUrl: settings.HeroBadgeImageURL || '',
+      pollSeconds: number(settings.OrderPollingSeconds) || 8
+    };
+  }
+
+  async function loadProtectedRoute() {
+    try {
+      if (route === 'admin') await loadAdmin();
+      else await loadOps();
+      if (state.user?.mustChangePin) await requirePinChange();
+      startPolling();
+    } catch (error) {
+      if (['AUTH_REQUIRED', 'AUTH_EXPIRED', 'PERMISSION_DENIED'].includes(error.code)) {
+        clearAuth();
+        renderLogin();
+        notify(error.message, 'error');
+      } else throw error;
+    }
+  }
+
+  async function requirePinChange() {
+    const result = await Swal.fire({
+      title: 'ตั้ง PIN ใหม่ก่อนเริ่มงาน',
+      text: 'ใช้ตัวอักษรภาษาอังกฤษหรือตัวเลข 6–12 ตัว และไม่ควรใช้ PIN เริ่มต้นซ้ำ',
+      input: 'password', inputAttributes: { inputmode: 'text', maxlength: '12', autocomplete: 'new-password', autocapitalize: 'none', spellcheck: 'false' },
+      allowOutsideClick: false, allowEscapeKey: false, confirmButtonText: 'บันทึก PIN ใหม่', confirmButtonColor: '#B7442B',
+      inputValidator: value => {
+        const newPin = String(value || '');
+        if (!/^[A-Za-z0-9]{6,12}$/.test(newPin)) return 'PIN ต้องเป็นตัวอักษรภาษาอังกฤษหรือตัวเลข 6–12 ตัว';
+        if (newPin === 'zaq1234') return 'กรุณาตั้ง PIN ใหม่ที่ไม่ใช่รหัสเริ่มต้น';
+        return undefined;
+      }
+    });
+    if (!result.value) return;
+    await api('changeMyPin', { token: state.authToken, newPin: result.value });
+    state.user.mustChangePin = false;
+    notify('เปลี่ยน PIN แล้ว', 'success');
+  }
+
+  function clearAuth() {
+    const sharedAdminToken = sessionStorage.getItem('phius-auth-admin');
+    const clearSharedAdmin = state.user?.role === 'ADMIN' || (sharedAdminToken && sharedAdminToken === state.authToken);
+    state.authToken = '';
+    state.user = null;
+    state.ops = null;
+    state.admin = null;
+    sessionStorage.removeItem(`phius-auth-${route}`);
+    if (clearSharedAdmin) sessionStorage.removeItem('phius-auth-admin');
+    stopPolling();
+  }
+
+  async function logout() {
+    try { if (state.authToken) await api('logoutStaff', { token: state.authToken }); } catch (_) {}
+    clearAuth();
+    renderLogin();
+  }
+
+  function renderCustomer() {
+    mountTemplate('tpl-customer');
+    bindText('restaurant-name', state.app.name || 'Phius Thai Kitchen');
+    bindText('tagline', state.app.tagline || 'Modern Thai Vitality');
+    bindText('hero-kicker', state.app.heroKicker || 'อิ่มอร่อยในแบบของคุณ');
+    bindText('hero-title', state.app.heroTitle || 'เลือกเมนูโปรด\nแล้วส่งตรงถึงครัว');
+    bindText('table-name', state.customer.table.Name || state.customer.table.TableID);
+    renderHeroEmblem();
+    renderPromotions();
+    renderCategories();
+    renderMenu();
+    renderTracking();
+    renderCartBar();
+    document.getElementById('menu-search').addEventListener('input', event => {
+      state.search = event.target.value.trim().toLowerCase();
+      renderMenu();
+    });
+  }
+
+  function renderHeroEmblem() {
+    const emblem = document.querySelector('[data-hero-emblem]');
+    if (!emblem) return;
+    const imageUrl = state.app?.heroBadgeImageUrl || '';
+    if (!imageUrl) {
+      emblem.classList.remove('has-image');
+      emblem.textContent = state.app?.heroBadgeText || 'อร่อย';
+      return;
+    }
+    const image = document.createElement('img');
+    image.src = imageUrl;
+    image.alt = '';
+    image.addEventListener('error', () => {
+      emblem.classList.remove('has-image');
+      emblem.textContent = state.app?.heroBadgeText || 'อร่อย';
+    }, { once: true });
+    emblem.classList.add('has-image');
+    emblem.replaceChildren(image);
+  }
+
+  function renderPromotions() {
+    const container = document.getElementById('promotion-section');
+    const promos = state.customer.promotions || [];
+    container.hidden = !promos.length;
+    container.innerHTML = promos.map(promo => `
+      <article class="promo-card">
+        ${promo.BannerImage ? `<img src="${escapeAttr(promo.BannerImage)}" alt="" loading="lazy" onerror="this.remove()">` : ''}
+        <div><small>${escapeHtml(promo.Code || 'โปรโมชั่น')}</small><strong>${escapeHtml(promo.Name)}</strong><small>${escapeHtml(promo.Description || '')}</small></div>
+      </article>`).join('');
+  }
+
+  function renderCategories() {
+    const container = document.getElementById('category-chips');
+    const categories = [{ CategoryID: 'ALL', Name: 'ทั้งหมด', Icon: '🍽️' }, ...(state.customer.categories || [])];
+    container.innerHTML = categories.map(category => `
+      <button class="chip ${state.activeCategory === category.CategoryID ? 'active' : ''}" data-category-id="${escapeAttr(category.CategoryID)}" type="button">${escapeHtml(category.Icon || '')} ${escapeHtml(category.Name)}</button>`).join('');
+  }
+
+  function renderMenu() {
+    const grid = document.getElementById('menu-grid');
+    if (!grid) return;
+    const filtered = (state.customer.menu || []).filter(item => {
+      const categoryMatch = state.activeCategory === 'ALL' || String(item.CategoryID) === state.activeCategory;
+      const haystack = `${item.Name || ''} ${item.Description || ''}`.toLowerCase();
+      return categoryMatch && (!state.search || haystack.includes(state.search));
+    });
+    grid.innerHTML = filtered.map(item => `
+      <article class="food-card ${item.available ? '' : 'sold-out'}">
+        <div class="food-image-wrap">
+          <img class="food-image" src="${escapeAttr(item.ImageURL || placeholderImage(item.Name))}" alt="${escapeAttr(item.Name)}" loading="lazy" onerror="this.src='${placeholderImage('อาหารไทย')}'">
+          ${item.available ? (truthy(item.IsPopular) ? '<span class="food-badge">เมนูยอดนิยม</span>' : '') : '<span class="food-badge sold">หมดชั่วคราว</span>'}
+        </div>
+        <div class="food-body">
+          <h3>${escapeHtml(item.Name)}</h3>
+          <p class="food-description">${escapeHtml(item.Description || 'เมนูแนะนำจากทางร้าน')}</p>
+          <div class="food-footer"><span class="food-price">${formatMoney(item.Price)}</span><button class="quick-add" data-action="open-item" data-item-id="${escapeAttr(item.ItemID)}" type="button" ${item.available ? '' : 'disabled'} aria-label="เลือก ${escapeAttr(item.Name)}">+</button></div>
+        </div>
+      </article>`).join('');
+    document.getElementById('menu-count').textContent = `${filtered.length} เมนู`;
+    document.getElementById('menu-empty').hidden = filtered.length > 0;
+  }
+
+  function openItemModal(itemId) {
+    const item = (state.customer.menu || []).find(row => String(row.ItemID) === String(itemId));
+    if (!item || !item.available) return;
+    const groups = groupBy(item.options || [], 'GroupName');
+    const groupHtml = Object.entries(groups).map(([groupName, options], groupIndex) => {
+      const required = options.some(option => truthy(option.IsRequired));
+      const type = String(options[0]?.InputType || 'CHECKBOX').toUpperCase() === 'RADIO' ? 'radio' : 'checkbox';
+      return `<section class="choice-group" data-option-group="${escapeAttr(groupName)}" data-required="${required}">
+        <div class="choice-heading"><h3>${escapeHtml(groupName)}</h3>${required ? '<span class="required-label">จำเป็นต้องเลือก</span>' : '<span class="form-helper">เลือกได้</span>'}</div>
+        <div class="choice-list">${options.map((option, index) => `<label class="choice-row"><input type="${type}" name="option-group-${groupIndex}" value="${escapeAttr(option.OptionID)}" ${required && index === 0 && type === 'radio' ? 'checked' : ''}><span>${escapeHtml(option.Label)}</span><span class="choice-price">${number(option.Price) ? `+${formatMoney(option.Price)}` : 'ไม่เพิ่มราคา'}</span></label>`).join('')}</div>
+      </section>`;
+    }).join('');
+    const addOnHtml = (item.addOns || []).length ? `<section class="choice-group"><div class="choice-heading"><h3>เพิ่มความอร่อย</h3><span class="form-helper">เลือกได้หลายรายการ</span></div><div class="choice-list">${item.addOns.map(addOn => `<label class="choice-row"><input type="checkbox" name="addon" value="${escapeAttr(addOn.AddOnID)}"><span>${escapeHtml(addOn.Name)}</span><span class="choice-price">+${formatMoney(addOn.Price)}</span></label>`).join('')}</div></section>` : '';
+    showModal(`
+      <div class="modal-header"><h2>รายละเอียดเมนู</h2><button class="icon-btn" data-action="close-modal" aria-label="ปิด">×</button></div>
+      <form id="item-form" data-item-id="${escapeAttr(item.ItemID)}">
+        <div class="modal-body">
+          <img class="item-detail-image" src="${escapeAttr(item.ImageURL || placeholderImage(item.Name))}" alt="${escapeAttr(item.Name)}" onerror="this.src='${placeholderImage('อาหารไทย')}'">
+          <div class="item-detail-title"><div><h2>${escapeHtml(item.Name)}</h2><p>${escapeHtml(item.Description || '')}</p></div><strong>${formatMoney(item.Price)}</strong></div>
+          ${groupHtml}${addOnHtml}
+          <section class="choice-group"><label>หมายเหตุถึงครัว<textarea name="note" maxlength="300" placeholder="เช่น ไม่ใส่ผัก แยกน้ำ"></textarea></label></section>
+          <div class="quantity-row"><strong>จำนวน</strong><div class="stepper"><button type="button" data-action="item-qty" data-delta="-1" aria-label="ลดจำนวน">−</button><strong id="item-qty">1</strong><button type="button" data-action="item-qty" data-delta="1" aria-label="เพิ่มจำนวน">+</button></div></div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-primary" id="add-item-button" type="submit">เพิ่มลงตะกร้า · <span id="item-total">${formatMoney(item.Price)}</span></button></div>
+      </form>`, 'item-modal');
+    modalRoot.querySelectorAll('input').forEach(input => input.addEventListener('change', updateItemModalPrice));
+    updateItemModalPrice();
+  }
+
+  function updateItemModalPrice() {
+    const form = document.getElementById('item-form');
+    if (!form) return;
+    const item = state.customer.menu.find(row => String(row.ItemID) === String(form.dataset.itemId));
+    const qty = number(document.getElementById('item-qty')?.textContent || 1);
+    const optionMap = Object.fromEntries((item.options || []).map(option => [String(option.OptionID), option]));
+    const addOnMap = Object.fromEntries((item.addOns || []).map(addOn => [String(addOn.AddOnID), addOn]));
+    const selected = [...form.querySelectorAll('input:checked')];
+    const extra = selected.reduce((sum, input) => {
+      const row = input.name === 'addon' ? addOnMap[input.value] : optionMap[input.value];
+      return sum + number(row?.Price);
+    }, 0);
+    document.getElementById('item-total').textContent = formatMoney((number(item.Price) + extra) * qty);
+  }
+
+  function addItemToCart(form) {
+    const item = state.customer.menu.find(row => String(row.ItemID) === String(form.dataset.itemId));
+    const requiredGroups = [...form.querySelectorAll('[data-option-group][data-required="true"]')];
+    const missing = requiredGroups.find(group => !group.querySelector('input:checked'));
+    if (missing) {
+      missing.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      notify(`กรุณาเลือก ${missing.dataset.optionGroup}`, 'error');
+      return;
+    }
+    const optionIds = [...form.querySelectorAll('input:not([name="addon"]):checked')].map(input => input.value);
+    const addOnIds = [...form.querySelectorAll('input[name="addon"]:checked')].map(input => input.value);
+    const options = (item.options || []).filter(option => optionIds.includes(String(option.OptionID)));
+    const addOns = (item.addOns || []).filter(addOn => addOnIds.includes(String(addOn.AddOnID)));
+    const qty = number(document.getElementById('item-qty')?.textContent || 1);
+    const unitPrice = number(item.Price) + options.reduce((sum, row) => sum + number(row.Price), 0) + addOns.reduce((sum, row) => sum + number(row.Price), 0);
+    state.cart.push({
+      lineId: clientId('line'), itemId: item.ItemID, name: item.Name, image: item.ImageURL || '', basePrice: number(item.Price), qty,
+      optionIds, addOnIds, options, addOns, note: String(new FormData(form).get('note') || '').trim(), unitPrice
+    });
+    state.checkoutKey = '';
+    saveCart();
+    closeModal();
+    renderCartBar();
+    notify(`เพิ่ม ${item.Name} ลงตะกร้าแล้ว`, 'success');
+  }
+
+  function renderCartBar() {
+    const bar = document.getElementById('cart-bar');
+    if (!bar) return;
+    const cartCount = state.cart.reduce((sum, line) => sum + number(line.qty), 0);
+    const cartTotal = state.cart.reduce((sum, line) => sum + number(line.qty) * number(line.unitPrice), 0);
+    const bundle = state.customer?.session;
+    const sessionOpen = bundle && !['PAID', 'CLOSED', 'CANCELLED'].includes(String(bundle.session?.Status));
+    const sessionItems = sessionOpen ? (bundle.items || []).filter(item => String(item.Status) !== 'CANCELLED') : [];
+    const sessionCount = sessionItems.reduce((sum, item) => sum + number(item.Qty), 0);
+    const button = bar.querySelector('button');
+
+    if (cartCount > 0) {
+      bar.hidden = false;
+      document.getElementById('cart-count').textContent = `${cartCount} รายการในตะกร้า`;
+      document.getElementById('cart-total').textContent = formatMoney(cartTotal);
+      button.dataset.action = 'open-cart';
+      button.innerHTML = 'ดูตะกร้า <span aria-hidden="true">→</span>';
+      return;
+    }
+
+    if (sessionCount > 0) {
+      bar.hidden = false;
+      document.getElementById('cart-count').textContent = `${sessionCount} รายการของโต๊ะ`;
+      document.getElementById('cart-total').textContent = formatMoney(bundle.session.Total);
+      button.dataset.action = 'scroll-tracking';
+      button.innerHTML = String(bundle.session.Status) === 'PAYMENT_PENDING' ? 'รอชำระเงิน' : 'ดูรายละเอียด';
+      return;
+    }
+
+    bar.hidden = true;
+  }
+
+  function openCart() {
+    if (!state.cart.length) return;
+    const subtotal = cartSubtotal();
+    const promo = (state.customer.promotions || []).find(row => String(row.Code).toUpperCase() === state.promoCode.toUpperCase());
+    const estimateDiscount = promo && subtotal >= number(promo.MinSpend)
+      ? (String(promo.DiscountType) === 'PERCENT' ? subtotal * number(promo.DiscountValue) / 100 : Math.min(subtotal, number(promo.DiscountValue))) : 0;
+    showModal(`
+      <div class="modal-header"><div><span class="eyebrow">ตรวจสอบก่อนส่ง</span><h2>ตะกร้าของคุณ</h2></div><button class="icon-btn" data-action="close-modal" aria-label="ปิด">×</button></div>
+      <form id="cart-form">
+        <div class="modal-body">
+          <div class="cart-list">${state.cart.map(line => `
+            <article class="cart-item"><div><h3>${escapeHtml(line.name)} × ${line.qty}</h3>
+            <p>${formatMoney(line.unitPrice)} ต่อรายการ</p>
+            ${(line.options || []).map(option => `<p>${escapeHtml(option.GroupName || option.group || '')}: ${escapeHtml(option.Label || option.label || '')}</p>`).join('')}
+            ${(line.addOns || []).map(addOn => `<p>+ ${escapeHtml(addOn.Name || addOn.name || '')}</p>`).join('')}
+            ${line.note ? `<p>หมายเหตุ: ${escapeHtml(line.note)}</p>` : ''}
+            <div class="cart-controls"><button type="button" data-action="remove-cart-line" data-line-id="${escapeAttr(line.lineId)}">นำออก</button><span>${formatMoney(line.unitPrice * line.qty)}</span></div></div>
+            <div class="stepper"><button type="button" data-action="cart-qty" data-line-id="${escapeAttr(line.lineId)}" data-delta="-1">−</button><strong>${line.qty}</strong><button type="button" data-action="cart-qty" data-line-id="${escapeAttr(line.lineId)}" data-delta="1">+</button></div></article>`).join('')}</div>
+          <section class="choice-group"><label>โค้ดโปรโมชั่น<input id="promo-code" name="promoCode" value="${escapeAttr(state.promoCode)}" maxlength="40" placeholder="เช่น WELCOME10"></label><span class="form-helper">ระบบจะตรวจสิทธิ์และยอดขั้นต่ำอีกครั้งก่อนยืนยัน</span></section>
+          <div class="totals-card"><div class="total-row"><span>ยอดสินค้าโดยประมาณ</span><strong>${formatMoney(subtotal)}</strong></div>${estimateDiscount ? `<div class="total-row"><span>ส่วนลดโดยประมาณ</span><strong>−${formatMoney(estimateDiscount)}</strong></div>` : ''}<div class="total-row grand"><span>ประมาณการ</span><strong>${formatMoney(subtotal - estimateDiscount)}</strong></div></div>
+        </div>
+        <div class="modal-footer"><button class="btn btn-primary" id="submit-order-button" type="submit">ยืนยันการสั่งอาหาร</button></div>
+      </form>`, 'cart-modal');
+  }
+
+  async function submitCart(form) {
+    if (state.submitting || !state.cart.length) return;
+    const button = document.getElementById('submit-order-button');
+    state.promoCode = String(new FormData(form).get('promoCode') || '').trim().toUpperCase();
+    if (!navigator.onLine) { notify('ยังออฟไลน์อยู่ ตะกร้าจะถูกเก็บไว้จนกว่าจะเชื่อมต่อ', 'error'); return; }
+    if (!state.checkoutKey) state.checkoutKey = clientId('order');
+    state.submitting = true;
+    await withButton(button, 'กำลังส่งออเดอร์เข้าครัว...', async () => {
+      const result = await api('submitOrder', {
+        tableToken: state.tableToken,
+        idempotencyKey: state.checkoutKey,
+        promoCode: state.promoCode,
+        items: state.cart.map(line => ({ itemId: line.itemId, qty: line.qty, optionIds: line.optionIds, addOnIds: line.addOnIds, note: line.note }))
+      });
+      sessionStorage.setItem(sessionKey(), result.SessionID);
+      state.cart = [];
+      state.checkoutKey = '';
+      saveCart();
+      closeModal();
+      renderCartBar();
+      notify('ส่งออเดอร์เข้าครัวแล้ว', 'success');
+      await refreshCustomerStatus();
+      startPolling();
+      document.getElementById('order-tracking')?.scrollIntoView({ behavior: 'smooth' });
+    }).catch(showError).finally(() => { state.submitting = false; });
+  }
+
+  async function requestService(type, button) {
+    if (type === 'BILL' && !currentSessionId()) {
+      notify('ยังไม่มีออเดอร์สำหรับเรียกเก็บเงิน', 'error');
+      return;
+    }
+    await withButton(button, type === 'BILL' ? 'กำลังแจ้งแคชเชียร์...' : 'กำลังเรียกพนักงาน...', async () => {
+      const result = await api('callStaff', { tableToken: state.tableToken, type, idempotencyKey: clientId('call') });
+      notify(result.duplicate ? 'แจ้งไว้แล้ว กรุณารอสักครู่' : 'แจ้งพนักงานแล้ว กรุณารอสักครู่', 'success');
+      await refreshCustomerStatus();
+    }).catch(showError);
+    renderTracking();
+  }
+
+  async function refreshCustomerStatus() {
+    const sessionId = currentSessionId();
+    if (!sessionId) return;
+    try {
+      const bundle = await api('getOrderStatus', { tableToken: state.tableToken, sessionId });
+      if (['PAID', 'CLOSED', 'CANCELLED'].includes(String(bundle?.session?.Status))) {
+        sessionStorage.removeItem(sessionKey());
+        localStorage.removeItem(cartKey());
+        state.cart = [];
+        state.customer.session = null;
+        state.paymentComplete = String(bundle?.session?.Status) === 'PAID';
+        stopPolling();
+      } else {
+        state.customer.session = bundle;
+        state.paymentComplete = false;
+      }
+      renderTracking();
+      renderCartBar();
+    } catch (error) {
+      if (error.code === 'SESSION_NOT_FOUND') sessionStorage.removeItem(sessionKey());
+      else throw error;
+    }
+  }
+
+  function currentSessionId() {
+    return state.customer?.session?.session?.SessionID || sessionStorage.getItem(sessionKey()) || '';
+  }
+
+  function renderTracking() {
+    const container = document.getElementById('tracking-content');
+    if (!container) return;
+    const bundle = state.customer?.session;
+    const billBanner = document.getElementById('bill-status-banner');
+    const billButton = document.querySelector('[data-call-type="BILL"]');
+    const billLabel = document.getElementById('bill-button-label');
+    if (!bundle || !(bundle.items || []).length) {
+      if (billBanner) billBanner.hidden = true;
+      if (billButton) billButton.disabled = false;
+      if (billLabel) billLabel.textContent = 'เรียกเก็บเงิน';
+      container.innerHTML = state.paymentComplete
+        ? '<div class="info-box payment-complete"><strong>✓ ชำระเงินเรียบร้อยแล้ว</strong><span>โต๊ะถูกรีเซตและพร้อมสำหรับการสั่งรอบใหม่</span></div>'
+        : '<div class="empty-state"><span>🥢</span><h3>พร้อมรับออเดอร์</h3><p>เลือกรายการที่ต้องการแล้วกดดูตะกร้า</p></div>';
+      return;
+    }
+    const isClosed = ['PAID', 'CLOSED', 'CANCELLED'].includes(String(bundle.session.Status));
+    const billPending = isBillPending(bundle);
+    if (billBanner) billBanner.hidden = !billPending;
+    document.querySelectorAll('[data-call-type]').forEach(button => {
+      button.disabled = isClosed || (button.dataset.callType === 'BILL' && billPending);
+      if (isClosed) button.title = 'รอบโต๊ะนี้ปิดแล้ว';
+    });
+    if (billLabel) billLabel.textContent = billPending ? 'เรียกเก็บเงินแล้ว' : 'เรียกเก็บเงิน';
+    container.innerHTML = `${billPending ? '<div class="inline-bill-status"><strong>🧾 แจ้งเรียกเก็บเงินแล้ว</strong><span>คุณยังตรวจสอบยอดและรายการทั้งหมดได้ระหว่างรอ</span></div>' : ''}<div class="tracking-list">${bundle.items.map(item => {
+      const meta = statusMeta(item.Status);
+      return `<article class="tracking-item"><span class="status-dot ${meta.className}"></span><div class="tracking-item-main"><div class="tracking-item-title"><strong>${escapeHtml(item.ItemName)} × ${item.Qty}</strong><strong>${formatMoney(item.LineTotal)}</strong></div><small>${formatMoney(item.UnitPrice)} ต่อรายการ</small>${renderItemSelections(item)}${item.Note ? `<small>หมายเหตุ: ${escapeHtml(item.Note)}</small>` : ''}</div><span class="status-pill ${meta.pill}">${meta.icon} ${meta.label}</span></article>`;
+    }).join('')}</div>${renderTotals(bundle.session)}`;
+  }
+
+  function isBillPending(bundle) {
+    return String(bundle?.session?.Status) === 'PAYMENT_PENDING' || (bundle?.calls || []).some(call => {
+      return String(call.Type) === 'BILL' && ['OPEN', 'ASSIGNED'].includes(String(call.Status));
+    });
+  }
+
+  function renderItemSelections(item) {
+    const options = (item.options || []).map(option => `<small>${escapeHtml(option.group || option.GroupName || 'ตัวเลือก')}: ${escapeHtml(option.label || option.Label || '')}${number(option.price ?? option.Price) ? ` (+${formatMoney(option.price ?? option.Price)})` : ''}</small>`);
+    const addOns = (item.addOns || []).map(addOn => `<small>+ ${escapeHtml(addOn.name || addOn.Name || '')}${number(addOn.price ?? addOn.Price) ? ` (${formatMoney(addOn.price ?? addOn.Price)})` : ''}</small>`);
+    return options.concat(addOns).join('');
+  }
+
+  function renderTotals(session) {
+    return `<div class="totals-card"><div class="total-row"><span>ยอดก่อนส่วนลด</span><strong>${formatMoney(session.Subtotal)}</strong></div>${number(session.Discount) ? `<div class="total-row"><span>ส่วนลด</span><strong>−${formatMoney(session.Discount)}</strong></div>` : ''}${number(session.ServiceCharge) ? `<div class="total-row"><span>ค่าบริการ</span><strong>${formatMoney(session.ServiceCharge)}</strong></div>` : ''}${number(session.Vat) ? `<div class="total-row"><span>VAT</span><strong>${formatMoney(session.Vat)}</strong></div>` : ''}<div class="total-row grand"><span>ยอดรวมทั้งหมด</span><strong>${formatMoney(session.Total)}</strong></div></div>`;
+  }
+
+  function loadCart() {
+    const raw = localStorage.getItem(cartKey());
+    try { state.cart = raw ? JSON.parse(raw) : []; } catch (_) { state.cart = []; }
+    const activeIds = new Set((state.customer.menu || []).filter(item => item.available).map(item => String(item.ItemID)));
+    state.cart = state.cart.filter(line => activeIds.has(String(line.itemId)));
+  }
+
+  function saveCart() { localStorage.setItem(cartKey(), JSON.stringify(state.cart)); }
+  function cartKey() { return `phius-cart-${state.tableToken}`; }
+  function sessionKey() { return `phius-session-${state.tableToken}`; }
+  function cartSubtotal() { return state.cart.reduce((sum, line) => sum + number(line.qty) * number(line.unitPrice), 0); }
+
+  async function loadOps(silent = false) {
+    const data = await api('getOpsDashboard', { token: state.authToken, view: roleMeta[route].dashboardView || roleMeta[route].expectedRole });
+    state.ops = data;
+    state.user = data.user;
+    if (!silent || !document.querySelector('.ops-page')) renderOpsShell();
+    else renderOpsContent();
+  }
+
+  function renderOpsShell() {
+    mountTemplate('tpl-ops-shell');
+    const meta = roleMeta[route];
+    bindText('ops-kicker', meta.kicker);
+    bindText('ops-title', meta.title);
+    bindText('user-name', state.user.name);
+    renderOpsContent();
+  }
+
+  function renderOpsContent() {
+    const summary = document.getElementById('ops-summary');
+    const content = document.getElementById('ops-content');
+    const tabs = document.getElementById('ops-tabs');
+    if (!summary || !content) return;
+    const data = state.ops.summary;
+    summary.innerHTML = [
+      ['โต๊ะเปิดอยู่', data.openTables, '🍽️'],
+      ['ออเดอร์ใหม่', data.newOrders, '🔔'],
+      ['กำลังทำ', data.preparing, '🔥'],
+      [route === 'staff' || route === 'operations' ? 'งานรอรับ' : 'พร้อมเสิร์ฟ', route === 'staff' || route === 'operations' ? data.waitingCalls : data.ready, route === 'staff' || route === 'operations' ? '🛎️' : '✅']
+    ].map(card => `<article class="summary-card"><span>${card[2]} ${card[0]}</span><strong>${card[1]}</strong></article>`).join('');
+    if (tabs) {
+      tabs.hidden = route !== 'operations';
+      tabs.innerHTML = route === 'operations' ? [
+        ['kitchen', '🔥 ครัว'], ['staff', '🛎️ พนักงาน'], ['cashier', '🧾 แคชเชียร์']
+      ].map(([id, label]) => `<button type="button" class="${state.opsTab === id ? 'active' : ''}" data-ops-tab="${id}">${label}</button>`).join('') : '';
+    }
+    if (route === 'operations') {
+      if (state.opsTab === 'staff') renderStaff(content);
+      else if (state.opsTab === 'cashier') renderCashier(content);
+      else renderKitchen(content);
+      return;
+    }
+    if (route === 'kitchen') renderKitchen(content);
+    if (route === 'staff') renderStaff(content);
+    if (route === 'cashier') renderCashier(content);
+  }
+
+  function renderKitchen(container) {
+    const columns = [
+      { status: 'NEW', title: 'ออเดอร์ใหม่' },
+      { status: 'PREPARING', title: 'กำลังทำ' },
+      { status: 'READY', title: 'พร้อมเสิร์ฟ' }
+    ];
+    container.innerHTML = `<div class="kanban">${columns.map(column => {
+      const items = state.ops.items.filter(item => String(item.Status) === column.status);
+      return `<section class="kanban-column"><div class="kanban-heading"><h2>${column.title}</h2><span class="column-count">${items.length}</span></div><div class="order-stack">${items.length ? items.map(renderOrderCard).join('') : '<div class="empty-state"><span>✓</span><p>ยังไม่มีรายการ</p></div>'}</div></section>`;
+    }).join('')}</div>`;
+  }
+
+  function renderOrderCard(item) {
+    const next = item.Status === 'NEW' ? 'PREPARING' : item.Status === 'PREPARING' ? 'READY' : '';
+    const label = next === 'PREPARING' ? 'เริ่มทำ' : next === 'READY' ? 'พร้อมเสิร์ฟ' : '';
+    const choices = [...(item.options || []).map(row => row.label || row.Label), ...(item.addOns || []).map(row => row.name || row.Name)].filter(Boolean);
+    return `<article class="order-card ${String(item.Status).toLowerCase()}"><div class="order-card-head"><div><h3>${escapeHtml(item.table?.Name || item.TableID || 'โต๊ะ')}</h3><time>${elapsed(item.CreatedAt)}</time></div><span class="status-pill">${statusMeta(item.Status).label}</span></div><ul><li><strong>${item.Qty} × ${escapeHtml(item.ItemName)}</strong>${choices.length ? `<br><small>${escapeHtml(choices.join(', '))}</small>` : ''}</li></ul>${item.Note ? `<div class="order-note">หมายเหตุ: ${escapeHtml(item.Note)}</div>` : ''}<div class="order-actions">${next ? `<button class="btn ${next === 'READY' ? 'btn-secondary' : 'btn-primary'} btn-small" data-order-status="${next}" data-order-item-id="${escapeAttr(item.OrderItemID)}">${label}</button>` : '<span class="status-pill green">รอพนักงานเสิร์ฟ</span>'}</div></article>`;
+  }
+
+  function renderStaff(container) {
+    const calls = state.ops.calls || [];
+    const ready = state.ops.items.filter(item => String(item.Status) === 'READY');
+    container.innerHTML = `<div class="section-heading"><div><span class="eyebrow">Customer Calls</span><h2>งานเรียกจากโต๊ะ</h2></div></div><div class="task-grid">${calls.length ? calls.map(call => `<article class="task-card"><div class="task-card-head"><div><span class="task-type">${call.Type === 'BILL' ? 'เรียกเก็บเงิน' : 'เรียกพนักงาน'}</span><h3>${escapeHtml(call.table?.Name || call.TableID)}</h3></div><small>${elapsed(call.CreatedAt)}</small></div><p>${call.Status === 'ASSIGNED' ? 'มีพนักงานรับงานแล้ว' : 'กำลังรอพนักงานรับงาน'}</p><button class="btn ${call.Status === 'OPEN' ? 'btn-primary' : 'btn-secondary'}" data-call-status="${call.Status === 'OPEN' ? 'ASSIGNED' : 'DONE'}" data-call-id="${escapeAttr(call.LogID)}">${call.Status === 'OPEN' ? 'รับงานนี้' : 'เสร็จเรียบร้อย'}</button></article>`).join('') : '<div class="empty-state"><span>🛎️</span><h3>ไม่มีงานเรียก</h3><p>ทุกโต๊ะได้รับการดูแลแล้ว</p></div>'}</div><div class="section-heading" style="margin-top:32px"><div><span class="eyebrow">Ready to Serve</span><h2>อาหารพร้อมเสิร์ฟ</h2></div></div><div class="task-grid">${ready.length ? ready.map(item => `<article class="task-card"><div class="task-card-head"><div><span class="task-type">พร้อมเสิร์ฟ</span><h3>${escapeHtml(item.table?.Name || '')}</h3></div><small>${elapsed(item.UpdatedAt)}</small></div><p><strong>${item.Qty} × ${escapeHtml(item.ItemName)}</strong></p><button class="btn btn-secondary" data-order-status="SERVED" data-order-item-id="${escapeAttr(item.OrderItemID)}">ยืนยันว่าเสิร์ฟแล้ว</button></article>`).join('') : '<div class="empty-state"><span>🍽️</span><h3>ยังไม่มีอาหารพร้อมเสิร์ฟ</h3></div>'}</div>`;
+  }
+
+  function renderCashier(container) {
+    const sessions = state.ops.sessions || [];
+    container.innerHTML = `<div class="section-heading"><div><span class="eyebrow">Active Bills</span><h2>โต๊ะที่กำลังใช้งาน</h2></div></div><div class="bill-grid">${sessions.length ? sessions.map(session => `<article class="bill-card"><div class="bill-card-head"><div><span class="status-pill ${session.Status === 'PAYMENT_PENDING' ? 'red' : ''}">${session.Status === 'PAYMENT_PENDING' ? 'เรียกเก็บเงินแล้ว' : 'กำลังรับประทาน'}</span><h3>${escapeHtml(session.table?.Name || session.TableID)}</h3></div><strong>${formatMoney(session.Total)}</strong></div><p>${session.items.length} รายการ · เปิด ${formatTime(session.OpenTime)}</p><button class="btn ${session.Status === 'PAYMENT_PENDING' ? 'btn-primary' : 'btn-ghost'}" data-action="open-bill" data-session-id="${escapeAttr(session.SessionID)}">ตรวจบิล</button></article>`).join('') : '<div class="empty-state"><span>🧾</span><h3>ยังไม่มีบิลเปิดอยู่</h3><p>เมื่อมีลูกค้าสั่งอาหาร บิลจะแสดงที่นี่</p></div>'}</div>`;
+  }
+
+  function openBill(sessionId) {
+    const session = state.ops.sessions.find(row => String(row.SessionID) === String(sessionId));
+    if (!session) return;
+    showModal(`<div class="modal-header"><div><span class="eyebrow">Billing</span><h2>${escapeHtml(session.table?.Name || session.TableID)}</h2></div><button class="icon-btn" data-action="close-modal">×</button></div><form id="payment-form" data-session-id="${escapeAttr(session.SessionID)}"><div class="modal-body"><div class="receipt-items">${session.items.map(renderBillItem).join('')}</div>${renderTotals(session)}<section class="choice-group"><label>วิธีชำระเงิน<select name="method" required><option value="">เลือกวิธีชำระ</option><option value="CASH">เงินสด</option><option value="TRANSFER">โอนเงิน</option><option value="CARD">บัตร</option><option value="OTHER">อื่น ๆ</option></select></label></section><section class="choice-group"><label>เลขอ้างอิง (ถ้ามี)<input name="reference" maxlength="100"></label></section></div><div class="modal-footer"><button class="btn btn-primary" id="close-table-button" type="submit">รับชำระเงินและรีเซตโต๊ะ</button></div></form>`, 'bill-modal');
+  }
+
+  function renderBillItem(item) {
+    return `<article class="receipt-item"><div class="receipt-item-head"><strong>${escapeHtml(item.ItemName)} × ${item.Qty}</strong><strong>${formatMoney(item.LineTotal)}</strong></div><small>${formatMoney(item.UnitPrice)} ต่อรายการ</small>${renderItemSelections(item)}${item.Note ? `<small>หมายเหตุ: ${escapeHtml(item.Note)}</small>` : ''}</article>`;
+  }
+
+  async function submitPayment(form) {
+    const method = new FormData(form).get('method');
+    if (!method) { notify('กรุณาเลือกวิธีชำระเงิน', 'error'); return; }
+    const confirmed = await Swal.fire({ title: 'ยืนยันการปิดโต๊ะ?', text: 'ระบบจะบันทึกการชำระและเปิดโต๊ะสำหรับลูกค้ารอบใหม่', icon: 'question', showCancelButton: true, confirmButtonText: 'ยืนยันรับชำระ', cancelButtonText: 'ตรวจสอบอีกครั้ง', confirmButtonColor: '#B7442B' });
+    if (!confirmed.isConfirmed) return;
+    const button = document.getElementById('close-table-button');
+    const data = new FormData(form);
+    if (!form.dataset.idempotencyKey) form.dataset.idempotencyKey = clientId('payment');
+    await withButton(button, 'กำลังบันทึกการชำระ...', async () => {
+      const result = await api('closeTable', { token: state.authToken, sessionId: form.dataset.sessionId, method: data.get('method'), reference: data.get('reference'), idempotencyKey: form.dataset.idempotencyKey });
+      closeModal();
+      notify('รับชำระและปิดโต๊ะแล้ว', 'success');
+      showReceipt(result.receipt);
+      await loadOps(true);
+    }).catch(showError);
+  }
+
+  function showReceipt(receipt) {
+    const payment = receipt.payment || {};
+    showModal(`<div class="modal-header"><div><span class="eyebrow">Payment Complete</span><h2>ชำระเงินและรีเซตโต๊ะแล้ว</h2></div><button class="icon-btn" data-action="close-modal">×</button></div><div class="modal-body" id="receipt-print"><div class="receipt-sheet"><h2>${escapeHtml(receipt.restaurantName)}</h2><p>${escapeHtml(receipt.table)} · ${escapeHtml(receipt.session.SessionID)}</p><div class="payment-meta"><span>ชำระโดย ${escapeHtml(paymentMethodLabel(payment.Method || receipt.session.PaymentMethod))}</span>${payment.Reference ? `<span>อ้างอิง ${escapeHtml(payment.Reference)}</span>` : ''}<span>${formatDateTime(payment.PaidAt || receipt.generatedAt)}</span></div><div class="receipt-items">${receipt.items.map(renderBillItem).join('')}</div>${renderTotals(receipt.session)}<div class="info-box payment-complete"><strong>✓ โต๊ะพร้อมรับลูกค้ารอบใหม่</strong><span>ออเดอร์เดิมถูกปิดและแยกออกจากรอบถัดไปแล้ว</span></div></div></div><div class="modal-footer"><button class="btn btn-ghost" data-action="print-receipt">พิมพ์ใบเสร็จ</button><button class="btn btn-primary" data-action="create-receipt-pdf" data-session-id="${escapeAttr(receipt.session.SessionID)}">สร้าง PDF</button></div>`, 'receipt-modal');
+  }
+
+  function paymentMethodLabel(method) {
+    return { CASH: 'เงินสด', TRANSFER: 'โอนเงิน', CARD: 'บัตร', OTHER: 'อื่น ๆ' }[String(method || '').toUpperCase()] || 'ไม่ระบุ';
+  }
+
+  async function updateOrderStatus(button) {
+    const status = button.dataset.orderStatus;
+    await withButton(button, 'กำลังอัปเดต...', async () => {
+      await api('updateOrderItemStatus', { token: state.authToken, orderItemId: button.dataset.orderItemId, status });
+      notify('อัปเดตสถานะแล้ว', 'success');
+      await loadOps(true);
+    }).catch(showError);
+  }
+
+  async function updateCall(button) {
+    await withButton(button, 'กำลังบันทึก...', async () => {
+      await api('updateCallStatus', { token: state.authToken, logId: button.dataset.callId, status: button.dataset.callStatus });
+      notify('อัปเดตงานเรียกแล้ว', 'success');
+      await loadOps(true);
+    }).catch(showError);
+  }
+
+  async function loadAdmin(silent = false) {
+    const data = await api('adminGetData', { token: state.authToken });
+    state.admin = data;
+    state.user = data.user;
+    if (!silent || !document.querySelector('.admin-page')) {
+      mountTemplate('tpl-admin');
+      bindText('admin-name', data.user.name);
+    }
+    renderAdminTab();
+  }
+
+  function renderAdminTab() {
+    if (!state.admin) return;
+    const nav = document.getElementById('admin-nav');
+    nav?.querySelectorAll('[data-admin-tab]').forEach(button => button.classList.toggle('active', button.dataset.adminTab === state.adminTab));
+    const titleMap = { overview: 'ภาพรวมร้าน', tables: 'โต๊ะและ QR', catalog: 'เมนูอาหาร', promotions: 'โปรโมชั่น', staff: 'พนักงาน', settings: 'ตั้งค่าร้าน' };
+    const title = titleMap[state.adminTab] || 'ภาพรวมร้าน';
+    const titleNode = document.getElementById('admin-page-title');
+    if (titleNode) titleNode.textContent = title;
+    const primary = document.querySelector('[data-action="admin-primary"]');
+    if (primary) {
+      primary.hidden = ['overview', 'settings'].includes(state.adminTab);
+      primary.textContent = state.adminTab === 'tables' ? 'เพิ่มโต๊ะ' : state.adminTab === 'catalog' ? 'เพิ่มเมนู' : state.adminTab === 'promotions' ? 'เพิ่มโปรโมชั่น' : 'เพิ่มพนักงาน';
+    }
+    const container = document.getElementById('admin-content');
+    if (!container) return;
+    if (state.adminTab === 'overview') renderAdminOverview(container);
+    if (state.adminTab === 'tables') renderAdminTables(container);
+    if (state.adminTab === 'catalog') renderAdminCatalogV2(container);
+    if (state.adminTab === 'promotions') renderAdminPromotions(container);
+    if (state.adminTab === 'staff') renderAdminStaff(container);
+    if (state.adminTab === 'settings') renderAdminSettings(container);
+  }
+
+  function renderAdminOverview(container) {
+    const s = state.admin.summary;
+    container.innerHTML = `<div class="metric-grid"><article class="metric-card"><span>โต๊ะทั้งหมด</span><strong>${s.tables}</strong></article><article class="metric-card"><span>รอบโต๊ะที่เปิด</span><strong>${s.activeSessions}</strong></article><article class="metric-card"><span>รายการเมนู</span><strong>${s.menuItems}</strong></article><article class="metric-card"><span>ยอดขายวันนี้</span><strong>${formatMoney(s.todaySales)}</strong></article></div><section class="admin-shortcuts"><div class="section-heading"><div><span class="eyebrow">Quick Access</span><h2>ทางลัดหน้าปฏิบัติงาน</h2></div></div><div class="admin-shortcut-grid"><a class="admin-shortcut featured" href="#" data-app-page="operations"><span>🧭</span><div><strong>รวมงานหน้าร้าน</strong><small>ครัว พนักงาน และแคชเชียร์</small></div></a><a class="admin-shortcut" href="#" data-app-page="kitchen"><span>🔥</span><div><strong>หน้าครัว</strong><small>ออเดอร์และการปรุง</small></div></a><a class="admin-shortcut" href="#" data-app-page="staff"><span>🛎️</span><div><strong>พนักงาน</strong><small>เสิร์ฟและรับงานเรียก</small></div></a><a class="admin-shortcut" href="#" data-app-page="cashier"><span>🧾</span><div><strong>แคชเชียร์</strong><small>ตรวจบิลและชำระเงิน</small></div></a></div></section><section class="admin-help"><h3>ระบบพร้อมรับออเดอร์</h3><p>ตรวจ QR ของแต่ละโต๊ะ อัปเดตสถานะเมนู และทดสอบการทำงานด้วย PIN ของแต่ละบทบาทก่อนเปิดใช้งานจริง</p></section>`;
+    bindAppLinks(container);
+  }
+
+  function renderAdminTables(container) {
+    const rows = state.admin.Tables || [];
+    container.innerHTML = dataCard('รายการโต๊ะ', `${rows.length} โต๊ะ`, `<table class="data-table"><thead><tr><th>โต๊ะ</th><th>โซน</th><th>สถานะ</th><th>QR</th><th></th></tr></thead><tbody>${rows.map(row => `<tr><td><strong>${escapeHtml(row.Name)}</strong><br><small>${escapeHtml(row.TableID)}</small></td><td>${escapeHtml(row.Zone || '—')}</td><td>${statusBadge(row.Status)}</td><td>${row.orderUrl ? '<span class="status-pill green">พร้อมใช้งาน</span>' : '<span class="status-pill">รอ Deploy</span>'}</td><td><div class="row-actions"><button data-action="show-table-qr" data-table-id="${escapeAttr(row.TableID)}">ดู QR</button><button data-action="edit-entity" data-entity="table" data-id="${escapeAttr(row.TableID)}">แก้ไข</button></div></td></tr>`).join('')}</tbody></table>`);
+  }
+
+  function renderAdminCatalog(container) {
+    const categories = (state.admin.Categories || []).filter(row => String(row.Status) !== 'ARCHIVED');
+    const menu = (state.admin.MenuItems || []).filter(row => String(row.Status) !== 'ARCHIVED');
+    const options = (state.admin.Options || []).filter(row => String(row.Status) !== 'ARCHIVED');
+    const addOns = (state.admin.AddOns || []).filter(row => String(row.Status) !== 'ARCHIVED');
+    const categoryMap = Object.fromEntries(categories.map(row => [String(row.CategoryID), row.Name]));
+    const menuMap = Object.fromEntries(menu.map(row => [String(row.ItemID), row.Name]));
+    container.innerHTML = `<div class="admin-section-grid">${dataCard('หมวดหมู่', `<button class="btn btn-ghost btn-small" data-action="new-entity" data-entity="category">เพิ่มหมวด</button>`, `<table class="data-table" style="min-width:480px"><thead><tr><th>ชื่อ</th><th>ลำดับ</th><th></th></tr></thead><tbody>${categories.map(row => `<tr><td>${escapeHtml(row.Icon || '')} ${escapeHtml(row.Name)}</td><td>${row.SortOrder || 0}</td><td class="row-actions"><button data-action="edit-entity" data-entity="category" data-id="${escapeAttr(row.CategoryID)}">แก้ไข</button></td></tr>`).join('')}</tbody></table>`)}${dataCard('ตัวเลือกเมนู', `<button class="btn btn-ghost btn-small" data-action="new-entity" data-entity="option">เพิ่มตัวเลือก</button>`, `<table class="data-table" style="min-width:640px"><thead><tr><th>เมนู</th><th>กลุ่ม</th><th>ตัวเลือก</th><th>ราคา</th><th></th></tr></thead><tbody>${options.map(row => `<tr><td><strong>${escapeHtml(menuMap[String(row.ItemID)] || 'ไม่พบเมนู')}</strong><br><small>${escapeHtml(row.ItemID || '—')}</small></td><td>${escapeHtml(row.GroupName)}</td><td>${escapeHtml(row.Label)}</td><td>${formatMoney(row.Price)}</td><td class="row-actions"><button data-action="edit-entity" data-entity="option" data-id="${escapeAttr(row.OptionID)}">แก้ไข</button></td></tr>`).join('')}</tbody></table>`)}${dataCard('ส่วนเพิ่ม', `<button class="btn btn-ghost btn-small" data-action="new-entity" data-entity="addon">เพิ่มส่วนเสริม</button>`, `<table class="data-table" style="min-width:580px"><thead><tr><th>ชื่อ</th><th>ใช้กับ</th><th>ราคา</th><th></th></tr></thead><tbody>${addOns.map(row => `<tr><td>${escapeHtml(row.Name)}</td><td>${escapeHtml(addOnScopeLabel(row, categoryMap, menuMap))}</td><td>${formatMoney(row.Price)}</td><td class="row-actions"><button data-action="edit-entity" data-entity="addon" data-id="${escapeAttr(row.AddOnID)}">แก้ไข</button></td></tr>`).join('')}</tbody></table>`)}</div><div style="height:16px"></div>${dataCard('รายการอาหาร', `${menu.length} เมนู`, `<table class="data-table"><thead><tr><th>เมนู</th><th>หมวด</th><th>ราคา</th><th>สถานะ</th><th></th></tr></thead><tbody>${menu.map(row => `<tr><td><strong>${escapeHtml(row.Name)}</strong><br><small>${escapeHtml(row.ItemID)}</small></td><td>${escapeHtml(categoryMap[String(row.CategoryID)] || row.CategoryID || '—')}</td><td>${formatMoney(row.Price)}</td><td>${statusBadge(row.Status)}</td><td><div class="row-actions"><button data-action="edit-entity" data-entity="menu" data-id="${escapeAttr(row.ItemID)}">แก้ไข</button><button data-action="archive-entity" data-entity="menu" data-id="${escapeAttr(row.ItemID)}">ปิดเมนู</button></div></td></tr>`).join('')}</tbody></table>`)}`;
+  }
+
+  function renderAdminCatalogV2(container) {
+    const categories = activeAdminRows('Categories');
+    const menu = activeAdminRows('MenuItems');
+    const options = activeAdminRows('Options');
+    const addOns = activeAdminRows('AddOns');
+    const categoryMap = Object.fromEntries(categories.map(row => [String(row.CategoryID), row.Name]));
+    const menuMap = Object.fromEntries(menu.map(row => [String(row.ItemID), row.Name]));
+
+    const categoryRows = categories.length
+      ? categories.map(row => `<tr><td><strong>${escapeHtml(row.Icon || '')} ${escapeHtml(row.Name)}</strong><br><small>${escapeHtml(row.CategoryID)}</small></td><td>${number(row.SortOrder)}</td><td><div class="row-actions"><button type="button" data-action="edit-entity" data-entity="category" data-id="${escapeAttr(row.CategoryID)}">แก้ไข</button><button type="button" class="danger-link" data-action="delete-entity" data-entity="category" data-id="${escapeAttr(row.CategoryID)}">ลบ</button></div></td></tr>`).join('')
+      : emptyAdminTableRow(3, 'ยังไม่มีหมวดหมู่อาหาร');
+
+    const menuRows = menu.length
+      ? menu.map(row => `<tr><td><strong>${escapeHtml(row.Name)}</strong><br><small>${escapeHtml(row.ItemID)}</small></td><td>${escapeHtml(categoryMap[String(row.CategoryID)] || row.CategoryID || '—')}</td><td>${formatMoney(row.Price)}</td><td>${statusBadge(row.Status)}</td><td><div class="row-actions"><button type="button" data-action="edit-entity" data-entity="menu" data-id="${escapeAttr(row.ItemID)}">แก้ไข</button><button type="button" class="danger-link" data-action="delete-entity" data-entity="menu" data-id="${escapeAttr(row.ItemID)}">ลบ</button></div></td></tr>`).join('')
+      : emptyAdminTableRow(5, 'ยังไม่มีรายการอาหาร');
+
+    const optionRows = options.length
+      ? options.map(row => `<tr><td><strong>${escapeHtml(menuMap[String(row.ItemID)] || 'ไม่พบเมนู')}</strong><br><small>${escapeHtml(row.ItemID || '—')}</small></td><td>${escapeHtml(row.GroupName)}</td><td>${escapeHtml(row.Label)}</td><td>${formatMoney(row.Price)}</td><td><div class="row-actions"><button type="button" data-action="edit-entity" data-entity="option" data-id="${escapeAttr(row.OptionID)}">แก้ไข</button><button type="button" class="danger-link" data-action="delete-entity" data-entity="option" data-id="${escapeAttr(row.OptionID)}">ลบ</button></div></td></tr>`).join('')
+      : emptyAdminTableRow(5, 'ยังไม่มีตัวเลือกเมนู');
+
+    const addOnRows = addOns.length
+      ? addOns.map(row => `<tr><td><strong>${escapeHtml(row.Name)}</strong><br><small>${escapeHtml(row.AddOnID)}</small></td><td>${escapeHtml(addOnScopeLabel(row, categoryMap, menuMap))}</td><td>${formatMoney(row.Price)}</td><td><div class="row-actions"><button type="button" data-action="edit-entity" data-entity="addon" data-id="${escapeAttr(row.AddOnID)}">แก้ไข</button><button type="button" class="danger-link" data-action="delete-entity" data-entity="addon" data-id="${escapeAttr(row.AddOnID)}">ลบ</button></div></td></tr>`).join('')
+      : emptyAdminTableRow(4, 'ยังไม่มีส่วนเพิ่ม');
+
+    container.innerHTML = `<div class="catalog-stack">
+      ${dataCard('หมวดหมู่', `<button class="btn btn-ghost btn-small" type="button" data-action="new-entity" data-entity="category">เพิ่มหมวด</button>`, `<table class="data-table catalog-table compact"><thead><tr><th>หมวดหมู่</th><th>ลำดับ</th><th><span class="sr-only">จัดการ</span></th></tr></thead><tbody>${categoryRows}</tbody></table>`)}
+      ${dataCard('รายการอาหาร', `<button class="btn btn-ghost btn-small" type="button" data-action="new-entity" data-entity="menu">เพิ่มเมนู</button>`, `<table class="data-table catalog-table"><thead><tr><th>เมนู</th><th>หมวด</th><th>ราคา</th><th>สถานะ</th><th><span class="sr-only">จัดการ</span></th></tr></thead><tbody>${menuRows}</tbody></table>`)}
+      ${dataCard('ตัวเลือกเมนู', `<button class="btn btn-ghost btn-small" type="button" data-action="new-entity" data-entity="option">เพิ่มตัวเลือก</button>`, `<table class="data-table catalog-table"><thead><tr><th>เมนู</th><th>กลุ่ม</th><th>ตัวเลือก</th><th>ราคาเพิ่ม</th><th><span class="sr-only">จัดการ</span></th></tr></thead><tbody>${optionRows}</tbody></table>`)}
+      ${dataCard('ส่วนเพิ่ม (Add-on)', `<button class="btn btn-ghost btn-small" type="button" data-action="new-entity" data-entity="addon">เพิ่มส่วนเพิ่ม</button>`, `<table class="data-table catalog-table compact"><thead><tr><th>ชื่อ</th><th>ใช้กับ</th><th>ราคาเพิ่ม</th><th><span class="sr-only">จัดการ</span></th></tr></thead><tbody>${addOnRows}</tbody></table>`)}
+    </div>`;
+  }
+
+  function activeAdminRows(sheetName) {
+    return (state.admin[sheetName] || []).filter(row => String(row.Status) !== 'ARCHIVED');
+  }
+
+  function emptyAdminTableRow(columnCount, message) {
+    return `<tr><td colspan="${columnCount}"><div class="table-empty"><span>—</span><strong>${escapeHtml(message)}</strong><small>ใช้ปุ่มเพิ่มด้านบนเพื่อสร้างรายการแรก</small></div></td></tr>`;
+  }
+
+  function addOnScopeLabel(addOn, categoryMap, menuMap) {
+    const itemId = String(addOn.LinkedItemID || '');
+    const categoryId = String(addOn.LinkedCategoryID || '');
+    if (itemId && itemId !== 'ALL') return `เมนู: ${menuMap[itemId] || itemId}`;
+    if (categoryId && categoryId !== 'ALL') return `หมวด: ${categoryMap[categoryId] || categoryId}`;
+    return 'ทุกเมนู';
+  }
+
+  function renderAdminPromotions(container) {
+    const rows = state.admin.Promotions || [];
+    container.innerHTML = dataCard('โปรโมชั่นทั้งหมด', `${rows.length} รายการ`, `<table class="data-table"><thead><tr><th>ชื่อ</th><th>โค้ด</th><th>ส่วนลด</th><th>ช่วงเวลา</th><th>สถานะ</th><th></th></tr></thead><tbody>${rows.map(row => `<tr><td><strong>${escapeHtml(row.Name)}</strong></td><td>${escapeHtml(row.Code)}</td><td>${row.DiscountType === 'PERCENT' ? `${row.DiscountValue}%` : formatMoney(row.DiscountValue)}</td><td>${escapeHtml(String(row.StartDate).slice(0,10))} – ${escapeHtml(String(row.EndDate).slice(0,10))}</td><td>${statusBadge(row.Status)}</td><td class="row-actions"><button data-action="edit-entity" data-entity="promotion" data-id="${escapeAttr(row.PromoID)}">แก้ไข</button></td></tr>`).join('')}</tbody></table>`);
+  }
+
+  function renderAdminStaff(container) {
+    const rows = state.admin.Staff || [];
+    container.innerHTML = dataCard('บัญชีพนักงาน', `${rows.length} คน`, `<table class="data-table"><thead><tr><th>ชื่อ</th><th>บทบาท</th><th>สถานะ</th><th>เข้าสู่ระบบล่าสุด</th><th></th></tr></thead><tbody>${rows.map(row => `<tr><td><strong>${escapeHtml(row.Name)}</strong></td><td>${roleLabel(row.Role)}</td><td>${statusBadge(row.Status)}</td><td>${row.LastLogin ? formatDateTime(row.LastLogin) : 'ยังไม่เคย'}</td><td class="row-actions"><button data-action="edit-entity" data-entity="staff" data-id="${escapeAttr(row.StaffID)}">แก้ไข / ตั้ง PIN</button></td></tr>`).join('')}</tbody></table>`);
+  }
+
+  function renderAdminSettings(container) {
+    const s = state.admin.settings || {};
+    container.innerHTML = `<form id="admin-settings-form" class="data-card settings-form"><div class="data-card-header"><div><h2>แบรนด์และหน้าตาร้าน</h2><small>การเปลี่ยนแปลงจะแสดงในหน้าหลัก หน้าเมนูลูกค้า และแอปที่ติดตั้ง</small></div><button class="btn btn-primary btn-small" type="submit">บันทึกและนำไปใช้</button></div><div class="settings-layout"><div class="settings-sections"><section class="settings-block"><div><span class="eyebrow">Identity</span><h3>ชื่อและโลโก้</h3></div><div class="form-grid"><label>ชื่อระบบ<input name="AppName" maxlength="80" value="${escapeAttr(s.AppName || 'Phius Order')}" required><span class="form-helper">ใช้แทนข้อความ “Phius Order”</span></label><label>ชื่อร้าน<input name="RestaurantName" maxlength="120" value="${escapeAttr(s.RestaurantName || 'Phius Thai Kitchen')}" required><span class="form-helper">แสดงที่หน้าเมนูและใบเสร็จ</span></label><label class="full">คำโปรยร้าน<input name="RestaurantTagline" maxlength="160" value="${escapeAttr(s.RestaurantTagline || '')}" placeholder="เช่น Modern Thai Vitality"></label><label>ข้อความสำรองในโลโก้<input name="BrandLogoText" maxlength="8" value="${escapeAttr(s.BrandLogoText || 'ผ')}" placeholder="ผ"></label><label class="full">URL โลโก้<input name="BrandLogoURL" type="url" value="${escapeAttr(s.BrandLogoURL || '')}" placeholder="วาง URL รูปภาพ HTTPS"><span class="form-helper">แนะนำภาพสี่เหลี่ยมจัตุรัส พื้นหลังโปร่งใส</span></label><label class="full">หรืออัปโหลดโลโก้<input name="BrandLogoFile" type="file" accept="image/png,image/jpeg,image/webp"><span class="form-helper">PNG, JPEG หรือ WebP สูงสุด 7 MB</span></label></div></section><section class="settings-block"><div><span class="eyebrow">Color Theme</span><h3>โทนสี</h3></div><div class="form-grid color-settings"><label>สีหลัก<input name="PrimaryColor" type="color" value="${escapeAttr(s.PrimaryColor || '#B7442B')}"><span class="form-helper">${escapeHtml(s.PrimaryColor || '#B7442B')}</span></label><label>สีสถานะสำเร็จ<input name="SuccessColor" type="color" value="${escapeAttr(s.SuccessColor || '#2F6B4F')}"><span class="form-helper">${escapeHtml(s.SuccessColor || '#2F6B4F')}</span></label></div></section><section class="settings-block"><div><span class="eyebrow">Customer Hero</span><h3>ข้อความเปิดหน้าเมนู</h3></div><div class="form-grid"><label class="full">ข้อความบรรทัดเล็ก<input name="HeroKicker" maxlength="120" value="${escapeAttr(s.HeroKicker || 'อิ่มอร่อยในแบบของคุณ')}"></label><label class="full">ข้อความหลัก<textarea name="HeroTitle" maxlength="180" required>${escapeHtml(s.HeroTitle || 'เลือกเมนูโปรด\nแล้วส่งตรงถึงครัว')}</textarea><span class="form-helper">ขึ้นบรรทัดใหม่ได้ตามต้องการ</span></label><label>ข้อความในวงกลม<input name="HeroBadgeText" maxlength="20" value="${escapeAttr(s.HeroBadgeText || 'อร่อย')}"><span class="form-helper">ใช้เมื่อไม่ได้ใส่รูป</span></label><label class="full">URL รูปในวงกลม<input name="HeroBadgeImageURL" type="url" value="${escapeAttr(s.HeroBadgeImageURL || '')}" placeholder="วาง URL รูปภาพ HTTPS"></label><label class="full">หรืออัปโหลดรูปในวงกลม<input name="HeroBadgeImageFile" type="file" accept="image/png,image/jpeg,image/webp"><span class="form-helper">รูปจะถูกครอบให้เต็มวงกลมโดยอัตโนมัติ</span></label></div></section><section class="settings-block"><div><span class="eyebrow">Operations</span><h3>ราคาและการอัปเดต</h3></div><div class="form-grid"><label>สัญลักษณ์สกุลเงิน<input name="CurrencySymbol" value="${escapeAttr(s.CurrencySymbol || '฿')}" maxlength="4"></label><label>Service charge (%)<input name="ServiceChargePercent" type="number" min="0" max="100" step="0.01" value="${escapeAttr(s.ServiceChargePercent || 0)}"></label><label>VAT (%)<input name="VatPercent" type="number" min="0" max="100" step="0.01" value="${escapeAttr(s.VatPercent || 0)}"></label><label>อัปเดตสถานะทุก (วินาที)<input name="OrderPollingSeconds" type="number" min="5" max="60" value="${escapeAttr(s.OrderPollingSeconds || 8)}"></label></div></section></div><aside class="brand-preview-panel"><span class="eyebrow">ตัวอย่าง</span><div class="brand-preview-logo"><div class="brand-mark" data-settings-logo>${escapeHtml(s.BrandLogoText || 'ผ')}</div><div><strong data-settings-app-name>${escapeHtml(s.AppName || 'Phius Order')}</strong><small data-settings-restaurant-name>${escapeHtml(s.RestaurantName || 'Phius Thai Kitchen')}</small></div></div><div class="customer-hero settings-hero-preview"><div><p class="hero-kicker" data-settings-hero-kicker>${escapeHtml(s.HeroKicker || 'อิ่มอร่อยในแบบของคุณ')}</p><h2 data-settings-hero-title>${escapeHtml(s.HeroTitle || 'เลือกเมนูโปรด\nแล้วส่งตรงถึงครัว')}</h2></div><div class="hero-emblem" data-settings-hero-emblem>${escapeHtml(s.HeroBadgeText || 'อร่อย')}</div></div><p class="form-helper">ตัวอย่างจะเปลี่ยนตามข้อความและสีที่เลือก รูปใหม่จะแสดงหลังบันทึก</p></aside></div></form>`;
+    const colorGrid = container.querySelector('.color-settings');
+    if (colorGrid) {
+      colorGrid.insertAdjacentHTML('beforeend', `<label>สีพื้นหลังแอป<input name="BackgroundColor" type="color" value="${escapeAttr(s.BackgroundColor || '#FBF7F0')}"><span class="form-helper">${escapeHtml(s.BackgroundColor || '#FBF7F0')}</span></label><label>สีพื้นผิวการ์ด<input name="SurfaceColor" type="color" value="${escapeAttr(s.SurfaceColor || '#FFFFFF')}"><span class="form-helper">${escapeHtml(s.SurfaceColor || '#FFFFFF')}</span></label><label>สีข้อความหลัก<input name="TextColor" type="color" value="${escapeAttr(s.TextColor || '#211E1B')}"><span class="form-helper">${escapeHtml(s.TextColor || '#211E1B')}</span></label><p class="form-helper full">เพื่อให้อ่านง่าย ควรเลือกสีข้อความที่ตัดกับสีพื้นหลังและพื้นผิวการ์ด</p>`);
+    }
+    const settingsNote = container.querySelector('.data-card-header small');
+    if (settingsNote) settingsNote.textContent += ' · ระบบจะหยุดรีเฟรชอัตโนมัติขณะคุณแก้ไขหน้านี้';
+    renderSettingsAssetPreviews(container, s);
+    container.querySelector('#admin-settings-form')?.addEventListener('input', () => updateSettingsPreview(container));
+  }
+
+  function renderSettingsAssetPreviews(container, settings) {
+    const logo = container.querySelector('[data-settings-logo]');
+    if (logo) renderBrandMark(logo, settings.BrandLogoURL || '', settings.BrandLogoText || 'ผ');
+    const emblem = container.querySelector('[data-settings-hero-emblem]');
+    if (emblem && settings.HeroBadgeImageURL) {
+      const image = document.createElement('img');
+      image.src = settings.HeroBadgeImageURL;
+      image.alt = '';
+      image.addEventListener('error', () => {
+        emblem.classList.remove('has-image');
+        emblem.textContent = settings.HeroBadgeText || 'อร่อย';
+      }, { once: true });
+      emblem.classList.add('has-image');
+      emblem.replaceChildren(image);
+    }
+  }
+
+  function updateSettingsPreview(container) {
+    const form = container.querySelector('#admin-settings-form');
+    if (!form) return;
+    const value = name => String(form.elements[name]?.value || '');
+    const primary = safeHexColor(value('PrimaryColor'), '#B7442B');
+    const success = safeHexColor(value('SuccessColor'), '#2F6B4F');
+    const background = safeHexColor(value('BackgroundColor'), '#FBF7F0');
+    const surface = safeHexColor(value('SurfaceColor'), '#FFFFFF');
+    const textColor = safeHexColor(value('TextColor'), '#211E1B');
+    if (form.elements.PrimaryColor?.nextElementSibling) form.elements.PrimaryColor.nextElementSibling.textContent = primary;
+    if (form.elements.SuccessColor?.nextElementSibling) form.elements.SuccessColor.nextElementSibling.textContent = success;
+    if (form.elements.BackgroundColor?.nextElementSibling) form.elements.BackgroundColor.nextElementSibling.textContent = background;
+    if (form.elements.SurfaceColor?.nextElementSibling) form.elements.SurfaceColor.nextElementSibling.textContent = surface;
+    if (form.elements.TextColor?.nextElementSibling) form.elements.TextColor.nextElementSibling.textContent = textColor;
+    const preview = container.querySelector('.brand-preview-panel');
+    if (preview) {
+      preview.style.setProperty('--preview-primary', primary);
+      preview.style.setProperty('--preview-primary-dark', mixHexColor(primary, '#000000', .22));
+      preview.style.setProperty('--preview-primary-light', mixHexColor(primary, '#FFFFFF', .34));
+      preview.style.setProperty('--preview-background', background);
+      preview.style.setProperty('--preview-surface', surface);
+      preview.style.setProperty('--preview-text', textColor);
+      preview.style.setProperty('--preview-muted', mixHexColor(textColor, background, .48));
+      preview.style.setProperty('--preview-border', mixHexColor(textColor, background, .84));
+    }
+    const logo = container.querySelector('[data-settings-logo]');
+    if (logo && !value('BrandLogoURL')) {
+      logo.classList.remove('has-image');
+      logo.textContent = value('BrandLogoText') || 'ผ';
+    }
+    const appName = container.querySelector('[data-settings-app-name]');
+    const restaurantName = container.querySelector('[data-settings-restaurant-name]');
+    const kicker = container.querySelector('[data-settings-hero-kicker]');
+    const title = container.querySelector('[data-settings-hero-title]');
+    const emblem = container.querySelector('[data-settings-hero-emblem]');
+    if (appName) appName.textContent = value('AppName') || 'ชื่อระบบ';
+    if (restaurantName) restaurantName.textContent = value('RestaurantName') || 'ชื่อร้าน';
+    if (kicker) kicker.textContent = value('HeroKicker');
+    if (title) title.textContent = value('HeroTitle');
+    if (emblem && !value('HeroBadgeImageURL')) {
+      emblem.classList.remove('has-image');
+      emblem.textContent = value('HeroBadgeText') || 'อร่อย';
+    }
+  }
+
+  function dataCard(title, action, content) {
+    return `<section class="data-card"><div class="data-card-header"><h2>${escapeHtml(title)}</h2><div>${action}</div></div><div class="table-scroll">${content}</div></section>`;
+  }
+
+  function openAdminForm(entity, existing = {}) {
+    const fields = adminFields(entity);
+    const title = existing && Object.keys(existing).length ? 'แก้ไขข้อมูล' : 'เพิ่มข้อมูล';
+    const html = fields.map(field => renderAdminField(field, existing)).join('');
+    const entityId = existing[entityKey(entity)] || '';
+    const deleteButton = entityId && ['category', 'menu', 'option', 'addon'].includes(entity)
+      ? `<button class="btn btn-danger" type="button" data-action="delete-entity" data-entity="${escapeAttr(entity)}" data-id="${escapeAttr(entityId)}">ลบรายการ</button>`
+      : '';
+    showModal(`<div class="modal-header"><div><span class="eyebrow">Admin</span><h2>${title}</h2></div><button class="icon-btn" data-action="close-modal">×</button></div><form id="admin-entity-form" data-entity="${escapeAttr(entity)}" data-entity-id="${escapeAttr(entityId)}"><div class="modal-body"><div class="form-grid">${html}</div></div><div class="modal-footer">${deleteButton}<button class="btn btn-primary" id="save-entity-button" type="submit">บันทึกข้อมูล</button></div></form>`, 'admin-form-modal');
+  }
+
+  function adminFields(entity) {
+    const categoryOptions = (state.admin.Categories || []).filter(row => String(row.Status) !== 'ARCHIVED').map(row => [row.CategoryID, row.Name]);
+    const menuOptions = (state.admin.MenuItems || []).filter(row => String(row.Status) !== 'ARCHIVED').map(row => [row.ItemID, row.Name]);
+    const statusOptions = [['ACTIVE', 'ใช้งาน'], ['INACTIVE', 'ปิดชั่วคราว']];
+    const map = {
+      table: [field('Name','ชื่อโต๊ะ','text',true), field('Zone','โซน'), field('Status','สถานะ','select',true,[['AVAILABLE','พร้อมใช้งาน'],['DISABLED','ปิดใช้งาน'],['OCCUPIED','มีลูกค้า'],['PAYMENT_PENDING','รอชำระเงิน']])],
+      category: [field('Name','ชื่อหมวด','text',true), field('Icon','ไอคอน'), field('SortOrder','ลำดับ','number'), field('Status','สถานะ','select',true,statusOptions)],
+      menu: [field('Name','ชื่อเมนู','text',true), field('CategoryID','หมวดหมู่','select',true,categoryOptions), field('Price','ราคา','number',true), field('SortOrder','ลำดับ','number'), field('Description','รายละเอียด','textarea'), field('ImageURL','URL รูปภาพ','url'), field('ImageFile','หรืออัปโหลดรูป','file'), field('Status','สถานะ','select',true,[...statusOptions,['SOLD_OUT','หมดชั่วคราว']]), field('IsPopular','เมนูยอดนิยม','checkbox')],
+      option: [field('ItemID','เมนู','select',true,menuOptions), field('GroupName','ชื่อกลุ่ม เช่น ระดับความเผ็ด','text',true), field('Label','ชื่อตัวเลือก','text',true), field('Price','ราคาเพิ่ม','number'), field('InputType','รูปแบบ','select',true,[['RADIO','เลือกหนึ่ง'],['CHECKBOX','เลือกหลาย']]), field('IsRequired','จำเป็นต้องเลือก','checkbox'), field('SortOrder','ลำดับ','number'), field('Status','สถานะ','select',true,statusOptions)],
+      addon: [field('Name','ชื่อส่วนเพิ่ม','text',true), field('Price','ราคาเพิ่ม','number'), field('LinkedCategoryID','ใช้กับหมวดอาหาร','select',false,categoryOptions,'เลือกหมวด หรือเลือกเมนูเฉพาะอีกช่องหนึ่ง'), field('LinkedItemID','หรือเมนูเฉพาะ','select',false,menuOptions,'เว้นว่างทั้งสองช่องเมื่อต้องการใช้กับทุกเมนู'), field('SortOrder','ลำดับ','number'), field('Status','สถานะ','select',true,statusOptions)],
+      promotion: [field('Name','ชื่อโปรโมชั่น','text',true), field('Code','โค้ด','text',true), field('Description','คำอธิบาย','textarea'), field('DiscountType','ประเภทส่วนลด','select',true,[['PERCENT','เปอร์เซ็นต์'],['FIXED','จำนวนเงิน']]), field('DiscountValue','มูลค่าส่วนลด','number',true), field('MinSpend','ยอดขั้นต่ำ','number'), field('StartDate','วันเริ่ม','date',true), field('EndDate','วันสิ้นสุด','date',true), field('BannerImage','URL รูปโปรโมชั่น','url'), field('ImageFile','หรืออัปโหลดรูป','file'), field('Status','สถานะ','select',true,statusOptions)],
+      staff: [field('Name','ชื่อพนักงาน','text',true), field('Role','บทบาท','select',true,[['KITCHEN','ครัว'],['STAFF','พนักงานเสิร์ฟ'],['CASHIER','แคชเชียร์'],['ADMIN','ผู้ดูแล']]), field('PIN','PIN ใหม่ (เว้นว่างหากไม่เปลี่ยน)','password'), field('Status','สถานะ','select',true,statusOptions)]
+    };
+    return map[entity] || [];
+  }
+
+  function field(name, label, type = 'text', required = false, options = [], helper = '') { return { name, label, type, required, options, helper }; }
+  function renderAdminField(fieldDef, existing) {
+    const value = existing[fieldDef.name] == null ? '' : existing[fieldDef.name];
+    const required = fieldDef.required ? 'required' : '';
+    const full = ['textarea', 'url', 'file'].includes(fieldDef.type) ? 'full' : '';
+    const helper = fieldDef.helper ? `<span class="form-helper">${escapeHtml(fieldDef.helper)}</span>` : '';
+    if (fieldDef.type === 'select') return `<label class="${full}">${escapeHtml(fieldDef.label)}<select name="${fieldDef.name}" ${required}><option value="">${fieldDef.required ? 'เลือก' : 'ไม่เลือก'}</option>${fieldDef.options.map(([optionValue, label]) => `<option value="${escapeAttr(optionValue)}" ${String(value) === String(optionValue) ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}</select>${helper}</label>`;
+    if (fieldDef.type === 'textarea') return `<label class="full">${escapeHtml(fieldDef.label)}<textarea name="${fieldDef.name}" ${required}>${escapeHtml(value)}</textarea></label>`;
+    if (fieldDef.type === 'checkbox') return `<label class="choice-row"><input type="checkbox" name="${fieldDef.name}" value="true" ${truthy(value) ? 'checked' : ''}><span>${escapeHtml(fieldDef.label)}</span></label>`;
+    if (fieldDef.type === 'file') return `<label class="full">${escapeHtml(fieldDef.label)}<input type="file" name="${fieldDef.name}" accept="image/png,image/jpeg,image/webp"><span class="form-helper">ระบบจะย่อรูปก่อนอัปโหลด สูงสุด 7 MB</span></label>`;
+    return `<label class="${full}">${escapeHtml(fieldDef.label)}<input type="${fieldDef.type}" name="${fieldDef.name}" value="${escapeAttr(value)}" ${fieldDef.type === 'number' ? 'min="0" step="0.01"' : ''} ${required}></label>`;
+  }
+
+  async function saveAdminEntity(form) {
+    const entity = form.dataset.entity;
+    const data = Object.fromEntries(new FormData(form).entries());
+    const key = entityKey(entity);
+    if (form.dataset.entityId) data[key] = form.dataset.entityId;
+    form.querySelectorAll('input[type="checkbox"]').forEach(input => { data[input.name] = input.checked; });
+    const imageFile = form.querySelector('input[type="file"]')?.files?.[0];
+    const button = document.getElementById('save-entity-button');
+    await withButton(button, imageFile ? 'กำลังย่อและอัปโหลดรูป...' : 'กำลังบันทึกข้อมูล...', async () => {
+      if (imageFile) {
+        const dataUrl = await compressImage(imageFile);
+        const uploaded = await api('uploadMenuImage', { token: state.authToken, filename: imageFile.name, dataUrl });
+        if (entity === 'menu') data.ImageURL = uploaded.url;
+        if (entity === 'promotion') data.BannerImage = uploaded.url;
+        if (!uploaded.publicAccess) notify('อัปโหลดแล้ว แต่รูป Drive อาจต้องตั้งสิทธิ์แชร์', 'error');
+      }
+      delete data.ImageFile;
+      await api('adminSaveEntity', { token: state.authToken, entity, data });
+      closeModal();
+      notify('บันทึกข้อมูลแล้ว', 'success');
+      await loadAdmin(true);
+    }).catch(showError);
+  }
+
+  async function archiveEntity(button) {
+    const confirmed = await Swal.fire({ title: 'ปิดรายการนี้?', text: 'ข้อมูลเดิมจะยังคงอยู่และสามารถเปิดกลับได้ภายหลัง', icon: 'warning', showCancelButton: true, confirmButtonText: 'ปิดรายการ', cancelButtonText: 'ยกเลิก', confirmButtonColor: '#B7442B' });
+    if (!confirmed.isConfirmed) return;
+    await api('adminArchiveEntity', { token: state.authToken, entity: button.dataset.entity, id: button.dataset.id }).then(async () => { notify('ปิดรายการแล้ว', 'success'); await loadAdmin(true); }).catch(showError);
+  }
+
+  async function deleteEntity(button) {
+    const entityLabels = { category: 'หมวดหมู่', menu: 'เมนูอาหาร', option: 'ตัวเลือกเมนู', addon: 'Add-on' };
+    const entity = button.dataset.entity;
+    const entityId = button.dataset.id;
+    if (!entityLabels[entity] || !entityId) return;
+    const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#B7442B';
+    const deleteDescription = entity === 'category'
+      ? 'ลบได้เมื่อไม่มีเมนูใช้งานอยู่ในหมวดนี้ ประวัติออเดอร์เดิมจะยังคงอยู่'
+      : 'รายการจะหายจากหน้าร้านและหน้าจัดการ แต่ประวัติออเดอร์เดิมจะยังคงอยู่';
+    const confirmed = await Swal.fire({
+      title: `ลบ${entityLabels[entity]}นี้?`,
+      text: deleteDescription,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'ลบออกจากการใช้งาน',
+      cancelButtonText: 'ยกเลิก',
+      confirmButtonColor: primaryColor
+    });
+    if (!confirmed.isConfirmed) return;
+    await withButton(button, 'กำลังลบ...', async () => {
+      await api('adminArchiveEntity', { token: state.authToken, entity, id: entityId });
+      closeModal();
+      notify('ลบรายการแล้ว', 'success');
+      await loadAdmin(true);
+    }).catch(showError);
+  }
+
+  function showTableQr(tableId) {
+    const table = (state.admin.Tables || []).find(row => String(row.TableID) === String(tableId));
+    if (!table) return;
+    if (!table.orderUrl) { notify('ต้อง Deploy Web App ก่อนจึงจะสร้าง QR ได้', 'error'); return; }
+    showModal(`<div class="modal-header"><div><span class="eyebrow">Table QR</span><h2>${escapeHtml(table.Name)}</h2></div><button class="icon-btn" data-action="close-modal">×</button></div><div class="modal-body"><div id="table-qr-code" class="qr-box"></div><p class="hint-text" style="word-break:break-all">${escapeHtml(table.orderUrl)}</p></div><div class="modal-footer"><button class="btn btn-danger" data-action="rotate-table-token" data-table-id="${escapeAttr(table.TableID)}">เปลี่ยน QR</button><button class="btn btn-primary" data-action="print-qr">พิมพ์ QR</button></div>`, 'qr-modal');
+    const target = document.getElementById('table-qr-code');
+    if (window.QRCode) new QRCode(target, { text: table.orderUrl, width: 220, height: 220, colorDark: '#211E1B', colorLight: '#FFFFFF', correctLevel: QRCode.CorrectLevel.H });
+  }
+
+  async function rotateTableToken(button) {
+    const confirmed = await Swal.fire({ title: 'เปลี่ยน QR ของโต๊ะ?', text: 'QR เดิมจะใช้ไม่ได้ทันที', icon: 'warning', showCancelButton: true, confirmButtonText: 'เปลี่ยน QR', cancelButtonText: 'ยกเลิก', confirmButtonColor: '#B7442B' });
+    if (!confirmed.isConfirmed) return;
+    await api('rotateTableToken', { token: state.authToken, tableId: button.dataset.tableId }).then(async () => { closeModal(); notify('เปลี่ยน QR แล้ว', 'success'); await loadAdmin(true); }).catch(showError);
+  }
+
+  async function handleAppClick(event) {
+    const button = event.target.closest('button, [data-action], [data-admin-tab]');
+    if (!button) return;
+    if (button.dataset.action === 'reload') location.reload();
+    if (button.dataset.action === 'scroll-tracking') document.getElementById('order-tracking')?.scrollIntoView({ behavior: 'smooth' });
+    if (button.dataset.action === 'open-cart') openCart();
+    if (button.dataset.action === 'refresh-customer') refreshCustomerStatus().catch(showError);
+    if (button.dataset.action === 'open-item') openItemModal(button.dataset.itemId);
+    if (button.dataset.categoryId) { state.activeCategory = button.dataset.categoryId; renderCategories(); renderMenu(); }
+    if (button.dataset.callType) requestService(button.dataset.callType, button);
+    if (button.dataset.action === 'logout') logout();
+    if (button.dataset.orderStatus) updateOrderStatus(button);
+    if (button.dataset.callStatus) updateCall(button);
+    if (button.dataset.action === 'open-bill') openBill(button.dataset.sessionId);
+    if (button.dataset.opsTab) { state.opsTab = button.dataset.opsTab; renderOpsContent(); }
+    if (button.dataset.adminTab) { state.adminTab = button.dataset.adminTab; document.querySelector('.admin-sidebar')?.classList.remove('open'); renderAdminTab(); }
+    if (button.dataset.action === 'toggle-admin-nav') document.querySelector('.admin-sidebar')?.classList.toggle('open');
+    if (button.dataset.action === 'admin-primary') {
+      const entity = state.adminTab === 'tables' ? 'table' : state.adminTab === 'catalog' ? 'menu' : state.adminTab === 'promotions' ? 'promotion' : 'staff';
+      openAdminForm(entity);
+    }
+    if (button.dataset.action === 'new-entity') openAdminForm(button.dataset.entity);
+    if (button.dataset.action === 'edit-entity') openAdminForm(button.dataset.entity, findAdminEntity(button.dataset.entity, button.dataset.id));
+    if (button.dataset.action === 'archive-entity') archiveEntity(button);
+    if (button.dataset.action === 'delete-entity') deleteEntity(button);
+    if (button.dataset.action === 'show-table-qr') showTableQr(button.dataset.tableId);
+  }
+
+  function handleModalClick(event) {
+    if (event.target.classList.contains('modal-backdrop')) closeModal();
+    const button = event.target.closest('button, [data-action]');
+    if (!button) return;
+    if (button.dataset.action === 'close-modal') closeModal();
+    if (button.dataset.action === 'item-qty') {
+      const node = document.getElementById('item-qty');
+      node.textContent = String(Math.min(20, Math.max(1, number(node.textContent) + number(button.dataset.delta))));
+      updateItemModalPrice();
+    }
+    if (button.dataset.action === 'remove-cart-line') { state.cart = state.cart.filter(line => line.lineId !== button.dataset.lineId); state.checkoutKey = ''; saveCart(); closeModal(); renderCartBar(); if (state.cart.length) openCart(); }
+    if (button.dataset.action === 'cart-qty') {
+      const line = state.cart.find(row => row.lineId === button.dataset.lineId);
+      if (line) line.qty = Math.min(20, Math.max(1, number(line.qty) + number(button.dataset.delta)));
+      state.checkoutKey = ''; saveCart(); closeModal(); renderCartBar(); openCart();
+    }
+    if (button.dataset.action === 'print-receipt' || button.dataset.action === 'print-qr') window.print();
+    if (button.dataset.action === 'create-receipt-pdf') createReceiptPdf(button);
+    if (button.dataset.action === 'rotate-table-token') rotateTableToken(button);
+    if (button.dataset.action === 'delete-entity') deleteEntity(button);
+  }
+
+  function handleModalSubmit(event) {
+    event.preventDefault();
+    if (event.target.id === 'item-form') addItemToCart(event.target);
+    if (event.target.id === 'cart-form') submitCart(event.target);
+    if (event.target.id === 'payment-form') submitPayment(event.target);
+    if (event.target.id === 'admin-entity-form') saveAdminEntity(event.target);
+  }
+
+  async function createReceiptPdf(button) {
+    await withButton(button, 'กำลังสร้าง PDF...', async () => {
+      const result = await api('generateReceiptPdf', { token: state.authToken, sessionId: button.dataset.sessionId });
+      notify('สร้าง PDF แล้ว เปิดได้จาก Google Drive', 'success');
+      window.open(result.url, '_blank', 'noopener');
+    }).catch(showError);
+  }
+
+  function showModal(html, className = '') {
+    modalRoot.innerHTML = `<div class="modal-backdrop"><section class="modal-panel ${escapeAttr(className)}" role="dialog" aria-modal="true">${html}</section></div>`;
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeModal() {
+    modalRoot.replaceChildren();
+    document.body.style.overflow = '';
+  }
+
+  async function withButton(button, loadingText, work) {
+    if (!button || button.disabled) return;
+    const original = button.innerHTML;
+    button.disabled = true;
+    button.textContent = loadingText;
+    try { return await work(); }
+    finally { if (button.isConnected) { button.disabled = false; button.innerHTML = original; } }
+  }
+
+  function notify(message, type = '') {
+    clearTimeout(state.toastTimer);
+    statusCapsule.textContent = message;
+    statusCapsule.className = `status-capsule ${type}`;
+    statusCapsule.hidden = false;
+    state.toastTimer = setTimeout(() => { statusCapsule.hidden = true; }, type === 'error' ? 5200 : 3200);
+  }
+
+  function showError(error) {
+    console.error(error);
+    notify(error?.message || 'ทำรายการไม่สำเร็จ กรุณาลองใหม่', 'error');
+    if (['AUTH_EXPIRED', 'AUTH_REQUIRED'].includes(error?.code)) { clearAuth(); renderLogin(); }
+  }
+
+  function renderFatalError(error) {
+    appRoot.innerHTML = `<main id="main-content" class="center-page"><section class="setup-card"><div class="brand-mark">!</div><span class="eyebrow">ไม่สามารถเปิดระบบ</span><h1>${escapeHtml(error?.message || 'เกิดข้อผิดพลาด')}</h1><p>ตรวจสอบการเชื่อมต่อหรือรัน setupSystem() แล้วลองใหม่</p><button class="btn btn-primary" data-action="reload">ลองอีกครั้ง</button></section></main>`;
+  }
+
+  function updateNetworkState() { networkBanner.hidden = navigator.onLine; }
+
+  function startPolling() {
+    stopPolling();
+    if (document.hidden) return;
+    const seconds = Math.max(5, number(state.app?.pollSeconds || config.pollSeconds || 8));
+    if (route === 'order' && currentSessionId()) state.pollTimer = setInterval(() => refreshCustomerStatus().catch(() => {}), seconds * 1000);
+    if (['kitchen', 'staff', 'cashier', 'operations'].includes(route) && state.authToken) state.pollTimer = setInterval(() => loadOps(true).catch(error => { if (error.code === 'AUTH_EXPIRED') showError(error); }), seconds * 1000);
+    if (route === 'admin' && state.authToken) {
+      state.pollTimer = setInterval(() => {
+        const isEditing = state.adminTab !== 'overview'
+          || modalRoot.children.length > 0
+          || document.activeElement?.matches('input, textarea, select');
+        if (isEditing) return;
+        loadAdmin(true).catch(error => { if (error.code === 'AUTH_EXPIRED') showError(error); });
+      }, Math.max(15, seconds) * 1000);
+    }
+  }
+
+  function stopPolling() { if (state.pollTimer) clearInterval(state.pollTimer); state.pollTimer = null; }
+
+  function registerServiceWorker() {
+    if (!('serviceWorker' in navigator) || !window.__SW_URL__) return;
+    const register = () => navigator.serviceWorker.register(window.__SW_URL__).catch(error => console.info('Service worker unavailable in this deployment', error));
+    if (document.readyState === 'complete') register();
+    else window.addEventListener('load', register, { once: true });
+  }
+
+  function compressImage(file) {
+    return new Promise((resolve, reject) => {
+      if (file.size > 7 * 1024 * 1024) { reject(appError('IMAGE_TOO_LARGE', 'รูปต้องมีขนาดไม่เกิน 7 MB')); return; }
+      const reader = new FileReader();
+      reader.onerror = () => reject(appError('IMAGE_READ_FAILED', 'อ่านไฟล์รูปไม่สำเร็จ'));
+      reader.onload = () => {
+        const image = new Image();
+        image.onerror = () => reject(appError('IMAGE_READ_FAILED', 'เปิดรูปไม่สำเร็จ'));
+        image.onload = () => {
+          const max = 1400;
+          const scale = Math.min(1, max / Math.max(image.width, image.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(image.width * scale));
+          canvas.height = Math.max(1, Math.round(image.height * scale));
+          canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', .82));
+        };
+        image.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function findAdminEntity(entity, id) {
+    const sheetMap = { table: 'Tables', category: 'Categories', menu: 'MenuItems', option: 'Options', addon: 'AddOns', promotion: 'Promotions', staff: 'Staff' };
+    const key = entityKey(entity);
+    return (state.admin[sheetMap[entity]] || []).find(row => String(row[key]) === String(id)) || {};
+  }
+
+  function entityKey(entity) { return { table: 'TableID', category: 'CategoryID', menu: 'ItemID', option: 'OptionID', addon: 'AddOnID', promotion: 'PromoID', staff: 'StaffID' }[entity] || 'ID'; }
+  function groupBy(rows, key) { return rows.reduce((map, row) => { const value = String(row[key] || 'ตัวเลือก'); (map[value] ||= []).push(row); return map; }, {}); }
+  function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
+  function safeHexColor(value, fallback) { return /^#[0-9A-F]{6}$/i.test(String(value || '')) ? String(value).toUpperCase() : fallback; }
+  function mixHexColor(color, target, weight) {
+    const source = safeHexColor(color, '#B7442B').slice(1);
+    const destination = safeHexColor(target, '#FFFFFF').slice(1);
+    const ratio = Math.max(0, Math.min(1, number(weight)));
+    const channels = [0, 2, 4].map(index => {
+      const start = parseInt(source.slice(index, index + 2), 16);
+      const end = parseInt(destination.slice(index, index + 2), 16);
+      return Math.round(start + (end - start) * ratio).toString(16).padStart(2, '0');
+    });
+    return `#${channels.join('')}`;
+  }
+  function truthy(value) { return value === true || String(value).toLowerCase() === 'true' || String(value) === '1'; }
+  function clientId(prefix) { return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`; }
+  function escapeHtml(value) { return String(value == null ? '' : value).replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char])); }
+  function escapeAttr(value) { return escapeHtml(value).replace(/`/g, '&#96;'); }
+  function formatMoney(value) { return new Intl.NumberFormat('th-TH', { style: 'currency', currency: state.app?.currency || 'THB', maximumFractionDigits: 2 }).format(number(value)); }
+  function formatTime(value) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }); }
+  function formatDateTime(value) { const date = new Date(value); return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }); }
+  function elapsed(value) { const diff = Math.max(0, Date.now() - new Date(value).getTime()); const mins = Math.floor(diff / 60000); return mins < 1 ? 'เมื่อสักครู่' : `${mins} นาที`; }
+  function placeholderImage(label) { return `https:\/\/placehold.co/900x700/F4EEE5/706A63?text=${encodeURIComponent(label || 'Menu')}`; }
+  function roleLabel(role) { return { ADMIN: 'ผู้ดูแล', KITCHEN: 'ครัว', STAFF: 'พนักงานเสิร์ฟ', CASHIER: 'แคชเชียร์' }[role] || role; }
+  function statusBadge(status) { const meta = statusMeta(status); return `<span class="status-pill ${meta.pill}">${meta.icon} ${meta.label}</span>`; }
+  function statusMeta(status) {
+    return {
+      NEW: { label: 'ออเดอร์ใหม่', icon: '●', className: '', pill: '' },
+      PREPARING: { label: 'กำลังปรุง', icon: '🔥', className: 'preparing', pill: 'red' },
+      READY: { label: 'พร้อมเสิร์ฟ', icon: '✓', className: 'ready', pill: 'green' },
+      SERVED: { label: 'เสิร์ฟแล้ว', icon: '✓', className: 'served', pill: 'green' },
+      ACTIVE: { label: 'ใช้งาน', icon: '✓', className: 'ready', pill: 'green' },
+      AVAILABLE: { label: 'ว่าง', icon: '✓', className: 'ready', pill: 'green' },
+      OCCUPIED: { label: 'มีลูกค้า', icon: '●', className: '', pill: '' },
+      PAYMENT_PENDING: { label: 'รอชำระ', icon: '!', className: 'preparing', pill: 'red' },
+      SOLD_OUT: { label: 'หมดชั่วคราว', icon: '×', className: '', pill: 'red' },
+      INACTIVE: { label: 'ปิด', icon: '—', className: '', pill: '' },
+      ARCHIVED: { label: 'เก็บถาวร', icon: '—', className: '', pill: '' },
+      OPEN: { label: 'รอดำเนินการ', icon: '●', className: '', pill: '' },
+      ASSIGNED: { label: 'รับงานแล้ว', icon: '✓', className: 'ready', pill: 'green' }
+    }[String(status)] || { label: String(status || '—'), icon: '●', className: '', pill: '' };
+  }
+})();
+</script>

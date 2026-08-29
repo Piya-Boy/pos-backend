@@ -1,0 +1,137 @@
+<template id="tpl-setup-required">
+  <main id="main-content" class="center-page">
+    <section class="setup-card">
+      <div class="brand-mark" data-brand-mark>ผ</div>
+      <span class="eyebrow">ตั้งค่าครั้งแรก</span>
+      <h1>Phius Order ยังไม่พร้อมใช้งาน</h1>
+      <p>เปิด Apps Script แล้วรันฟังก์ชัน <strong>setupSystem()</strong> หนึ่งครั้ง ระบบจะสร้าง Google Sheets, โฟลเดอร์ Drive และ PIN เริ่มต้นให้โดยอัตโนมัติ</p>
+      <div class="info-box"><strong>หลังตั้งค่าแล้ว</strong><span>โหลดหน้านี้ใหม่เพื่อเริ่มใช้งาน</span></div>
+      <button class="btn btn-primary" data-action="reload">โหลดหน้าใหม่</button>
+    </section>
+  </main>
+</template>
+
+<template id="tpl-home">
+  <main id="main-content" class="center-page home-page">
+    <section class="setup-card portal-card">
+      <div class="brand-mark" data-brand-mark>ผ</div>
+      <span class="eyebrow" data-bind="tagline">Modern Thai Vitality</span>
+      <h1 data-bind="app-name">Phius Order</h1>
+      <p data-bind="restaurant-name">Phius Thai Kitchen</p>
+      <div class="portal-grid">
+        <a class="portal-link portal-link-featured" href="#" data-app-page="operations"><span>🧭</span><strong>รวมงานหน้าร้าน</strong><small>ครัว พนักงาน และแคชเชียร์ในหน้าเดียว</small></a>
+        <a class="portal-link" href="#" data-app-page="kitchen"><span>🔥</span><strong>หน้าครัว</strong><small>รับและอัปเดตออเดอร์</small></a>
+        <a class="portal-link" href="#" data-app-page="staff"><span>🛎️</span><strong>พนักงาน</strong><small>งานเสิร์ฟและลูกค้าเรียก</small></a>
+        <a class="portal-link" href="#" data-app-page="cashier"><span>🧾</span><strong>แคชเชียร์</strong><small>ตรวจบิลและรับชำระ</small></a>
+        <a class="portal-link" href="#" data-app-page="admin"><span>⚙️</span><strong>ผู้ดูแล</strong><small>เมนู โต๊ะ และตั้งค่า</small></a>
+      </div>
+      <p class="hint-text">หน้าลูกค้าต้องเปิดผ่าน QR ประจำโต๊ะ</p>
+    </section>
+    <footer class="app-footer">Created by CodingPhius Creativities · alphaphius.tkh@gmail.com</footer>
+  </main>
+</template>
+
+<template id="tpl-customer">
+  <main id="main-content" class="customer-page">
+    <header class="customer-header">
+      <div class="customer-brand">
+        <div class="brand-mark small" data-brand-mark>ผ</div>
+        <div>
+          <span class="eyebrow" data-bind="tagline">Modern Thai Vitality</span>
+          <h1 data-bind="restaurant-name">Phius Thai Kitchen</h1>
+        </div>
+      </div>
+      <button class="table-pill" type="button" data-action="scroll-tracking"><span>โต๊ะ</span><strong data-bind="table-name">—</strong></button>
+    </header>
+
+    <details class="customer-guide">
+      <summary><span>ⓘ</span><strong>วิธีสั่งอาหาร</strong><small>แตะเพื่อดูขั้นตอน</small></summary>
+      <ol>
+        <li><span>1</span><div><strong>เลือกเมนู</strong><small>เลือกตัวเลือกและส่วนเพิ่มที่ต้องการ</small></div></li>
+        <li><span>2</span><div><strong>ตรวจตะกร้าและส่งออเดอร์</strong><small>ราคาแต่ละรายการและยอดรวมจะแสดงก่อนยืนยัน</small></div></li>
+        <li><span>3</span><div><strong>ติดตามสถานะและเรียกเก็บเงิน</strong><small>ดูรายการของโต๊ะได้ตลอดจนชำระเสร็จ</small></div></li>
+      </ol>
+    </details>
+
+    <div id="bill-status-banner" class="bill-status-banner" role="status" hidden>
+      <span>🧾</span><div><strong>เรียกเก็บเงินแล้ว</strong><small>พนักงานได้รับแจ้งแล้ว กรุณารอสักครู่</small></div>
+    </div>
+
+    <section class="customer-hero">
+      <div>
+        <p class="hero-kicker" data-bind="hero-kicker">อิ่มอร่อยในแบบของคุณ</p>
+        <h2 data-bind="hero-title">เลือกเมนูโปรด
+แล้วส่งตรงถึงครัว</h2>
+      </div>
+      <div class="hero-emblem" data-hero-emblem aria-hidden="true">อร่อย</div>
+    </section>
+
+    <section id="promotion-section" class="promotion-strip" aria-label="โปรโมชั่น"></section>
+
+    <section class="menu-toolbar" aria-label="ค้นหาและหมวดหมู่">
+      <label class="search-box">
+        <span aria-hidden="true">⌕</span>
+        <span class="sr-only">ค้นหาเมนู</span>
+        <input id="menu-search" type="search" placeholder="ค้นหาเมนูที่อยากทาน" autocomplete="off">
+      </label>
+      <nav id="category-chips" class="chip-row" aria-label="หมวดหมู่อาหาร"></nav>
+    </section>
+
+    <section class="section-block">
+      <div class="section-heading">
+        <div><span class="eyebrow">เมนูของร้าน</span><h2>เลือกอาหาร</h2></div>
+        <span id="menu-count" class="count-label"></span>
+      </div>
+      <div id="menu-grid" class="menu-grid"></div>
+      <div id="menu-empty" class="empty-state" hidden><span>🍽️</span><h3>ยังไม่พบเมนู</h3><p>ลองเปลี่ยนคำค้นหรือเลือกหมวดอื่น</p></div>
+    </section>
+
+    <section id="order-tracking" class="section-block tracking-section">
+      <div class="section-heading"><div><span class="eyebrow">อัปเดตล่าสุด</span><h2>ออเดอร์ของโต๊ะ</h2></div><button class="btn btn-ghost btn-small" data-action="refresh-customer">รีเฟรช</button></div>
+      <div id="tracking-content"></div>
+      <div class="service-actions">
+        <button class="btn btn-secondary" data-call-type="ASSISTANCE"><span>🛎️</span>เรียกพนักงาน</button>
+        <button class="btn btn-outline" data-call-type="BILL"><span>🧾</span><span id="bill-button-label">เรียกเก็บเงิน</span></button>
+      </div>
+    </section>
+
+    <footer class="app-footer">Created by CodingPhius Creativities · alphaphius.tkh@gmail.com</footer>
+    <div id="cart-bar" class="cart-bar" hidden>
+      <div><strong id="cart-count">0 รายการ</strong><span id="cart-total">฿0</span></div>
+      <button class="btn btn-inverted" data-action="open-cart">ดูตะกร้า <span aria-hidden="true">→</span></button>
+    </div>
+  </main>
+</template>
+
+<template id="tpl-login">
+  <main id="main-content" class="center-page login-page">
+    <section class="login-card">
+      <a class="back-link" href="#" data-app-page="home">← กลับหน้าหลัก</a>
+      <div class="login-brand"><div class="brand-mark small" data-brand-mark>ผ</div><strong data-bind="app-name">Phius Order</strong></div>
+      <div class="role-icon" data-bind="role-icon">🔐</div>
+      <span class="eyebrow" data-bind="role-kicker">สำหรับพนักงาน</span>
+      <h1 data-bind="role-title">เข้าสู่ระบบ</h1>
+      <p data-bind="role-description">กรอก PIN เพื่อเข้าสู่พื้นที่ทำงาน</p>
+      <form id="login-form" class="stack-form">
+        <label>PIN
+          <input id="login-pin" class="pin-input" type="password" inputmode="text" pattern="[A-Za-z0-9]*" minlength="4" maxlength="12" autocomplete="current-password" autocapitalize="none" spellcheck="false" placeholder="••••••" required>
+        </label>
+        <button class="btn btn-primary btn-block" type="submit">เข้าสู่ระบบ</button>
+      </form>
+      <p class="hint-text">PIN เริ่มต้น: <strong>zaq1234</strong> · ระบบจะให้เปลี่ยนหลังเข้าสู่ระบบครั้งแรก</p>
+    </section>
+  </main>
+</template>
+
+<template id="tpl-ops-shell">
+  <main id="main-content" class="ops-page">
+    <header class="ops-header">
+      <div><span class="eyebrow" data-bind="ops-kicker">Restaurant Operations</span><h1 data-bind="ops-title">พื้นที่ทำงาน</h1></div>
+      <div class="header-actions"><span class="user-chip" data-bind="user-name">—</span><button class="btn btn-ghost btn-small" data-action="logout">ออกจากระบบ</button></div>
+    </header>
+    <section id="ops-summary" class="summary-grid"></section>
+    <nav id="ops-tabs" class="ops-tabs" aria-label="หมวดงานหน้าร้าน" hidden></nav>
+    <section id="ops-content" class="ops-content"></section>
+    <footer class="app-footer">Created by CodingPhius Creativities · alphaphius.tkh@gmail.com</footer>
+  </main>
+</template>

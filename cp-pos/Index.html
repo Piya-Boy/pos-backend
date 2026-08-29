@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="<?= shellPrimaryColor ?>">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="description" content="ระบบสั่งอาหารผ่าน QR สำหรับร้านอาหาร">
+  <link rel="manifest" href="<?!= manifestUrl ?>">
+  <link rel="apple-touch-icon" href="<?= shellLogoUrl || 'https://placehold.co/192x192/B7442B/FFFFFF.png?text=Phius' ?>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script defer src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <title><?= shellAppName ?></title>
+  <?!= include('Styles') ?>
+  <style>:root{--primary:<?= shellPrimaryColor ?>;--bg:<?= shellBackgroundColor ?>;--surface:<?= shellSurfaceColor ?>;--ink:<?= shellTextColor ?>}</style>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">ข้ามไปยังเนื้อหา</a>
+  <div id="network-banner" class="network-banner" hidden>ออฟไลน์อยู่ — ข้อมูลที่ยังไม่ส่งจะถูกเก็บไว้ในเครื่อง</div>
+  <div id="app" class="app-root" aria-live="polite">
+    <main id="main-content" class="startup-shell">
+      <div class="brand-mark <?= shellLogoUrl ? 'has-image' : '' ?>" data-brand-mark aria-hidden="true"><? if (shellLogoUrl) { ?><img src="<?= shellLogoUrl ?>" alt=""><? } else { ?><?= shellLogoText ?><? } ?></div>
+      <h1><?= shellAppName ?></h1>
+      <strong class="startup-restaurant"><?= shellRestaurantName ?></strong>
+      <div class="skeleton-line wide"></div>
+      <div class="skeleton-line"></div>
+      <p>กำลังเตรียมเมนูและข้อมูลโต๊ะ...</p>
+    </main>
+  </div>
+  <div id="modal-root"></div>
+  <div id="status-capsule" class="status-capsule" role="status" aria-live="polite" hidden></div>
+
+  <?!= include('Pages') ?>
+  <?!= include('AdminUI') ?>
+  <script>window.__APP_CONFIG__ = <?!= appConfigJson ?>; window.__SW_URL__ = <?!= JSON.stringify(serviceWorkerUrl) ?>;</script>
+  <?!= include('App') ?>
+</body>
+</html>
