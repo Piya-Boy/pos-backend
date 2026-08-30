@@ -111,7 +111,23 @@ Run, in the task's repo dir:
 - **`superpowers:systematic-debugging`** — when a test fails and the cause isn't obvious (find root cause, don't guess-patch).
 - **`/code-review`** / **`security-review`** / **`cavecrew-reviewer`** — for §3.2 review.
 - **`superpowers:verification-before-completion`** — before ticking ✅, confirm tests actually ran + passed. No "should pass" claims.
-- **Docs when unsure**: backend → https://laravel.com/framework/docs/ ; frontend → https://docs.flutter.dev/ ; Sheets → https://developers.google.com/sheets/api. Do **not** guess API signatures.
+
+**Flutter / Dart skills (frontend — USE THESE, they're installed locally):**
+- `flutter-add-widget-test` — write widget tests (every UI task's test step).
+- `flutter-fix-layout-issues` — RenderFlex overflow / unbounded-constraint / "left-biased" layout problems.
+- `flutter-build-responsive-layout` — breakpoints (plan §3 / P1-T10).
+- `flutter-apply-architecture-best-practices` — layering (UI/logic/data) when structuring features.
+- `flutter-setup-declarative-routing` — `go_router` (P1-T4 router).
+- `flutter-implement-json-serialization` — model `fromJson`/`toJson` (P1-T2 models).
+- `flutter-use-http-package` — `http` client (P3 HttpApiClient).
+- `flutter-add-widget-preview` / `flutter-add-integration-test` — visual preview + integration coverage.
+- `flutter-setup-localization` — if Thai i18n is ever extracted (not required for parity port).
+- `dart-run-static-analysis` — `dart analyze` + `dart fix` before commit (pairs with `flutter analyze`).
+- `dart-add-unit-test`, `dart-fix-runtime-errors`, `dart-use-pattern-matching`, `dart-collect-coverage` — logic tests, runtime stack-trace fixes, cleaner switch/pattern code, coverage.
+
+**Backend (Laravel) skills:** none Flutter-specific; use `security-review` + the Laravel docs.
+
+- **Docs when unsure**: backend → https://laravel.com/framework/docs/ ; frontend → https://docs.flutter.dev/ ; Sheets → https://developers.google.com/sheets/api. Do **not** guess API signatures. Prefer the installed Flutter/Dart skills above over guessing.
 
 If a skill isn't available, follow this file's loop manually — same steps.
 
