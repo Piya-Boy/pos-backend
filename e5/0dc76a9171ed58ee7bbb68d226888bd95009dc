@@ -1,0 +1,14 @@
+PROGRESS.md
+  h_f820d1ed52287e 15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e50dc76a9171ed58ee7bbb68d226888bd95009dc",
+  "prompts": {},
+  "humans": {
+    "h_f820d1ed52287e": {
+      "author": "Piya Miang-lae <piyaboy097@gmail.com>"
+    }
+  }
+}
