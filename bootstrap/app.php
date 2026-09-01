@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\StaffAuth;
 use App\Pos\Support\AppError;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -14,7 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->alias(['staff.auth' => StaffAuth::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Every /api/* error renders the {ok,data,error} envelope with HTTP 200,
