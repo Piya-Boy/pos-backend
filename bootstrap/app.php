@@ -1,8 +1,10 @@
 <?php
 
+use App\Pos\Support\AppError;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Validation\ValidationException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -15,5 +17,26 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Every /api/* error renders the {ok,data,error} envelope with HTTP 200,
+        // matching the frontend ApiClient (back.md §6, App.html:113).
+        $exceptions->render(function (Throwable $e, $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+            if ($e instanceof AppError) {
+                return response()->json(['ok' => false, 'error' => [
+                    'code' => $e->errCode, 'message' => $e->getMessage(), 'details' => $e->details,
+                ]], 200);
+            }
+            if ($e instanceof ValidationException) {
+                return response()->json(['ok' => false, 'error' => [
+                    'code' => 'VALIDATION', 'message' => $e->validator->errors()->first(), 'details' => $e->errors(),
+                ]], 200);
+            }
+            report($e);
+
+            return response()->json(['ok' => false, 'error' => [
+                'code' => 'SERVER_ERROR', 'message' => 'เกิดข้อผิดพลาด กรุณาลองใหม่',
+            ]], 200);
+        });
     })->create();
