@@ -18,7 +18,9 @@ class PosSetup extends Command
 
     public function handle(SheetsClient $client): int
     {
-        $defs = SeedData::sheets();
+        // Seed the initial PIN hash with the SAME salt login will use (config),
+        // otherwise sha256(salt:pin) won't match and staff can't sign in.
+        $defs = SeedData::sheets((string) config('pos.auth_salt'));
         $names = array_keys($defs);
 
         if ($this->option('create')) {

@@ -13,11 +13,17 @@ class SeedData
 
     public const INITIAL_PIN = 'zaq1234';
 
-    /** @return array<string, array{headers: array, rows: array}> */
-    public static function sheets(): array
+    /**
+     * @param  string|null  $salt  salt for the initial PIN hash; defaults to the
+     *                             fixed test salt so FakeSheetsClient stays deterministic.
+     *                             pos:setup passes the real config salt for prod sheets.
+     * @return array<string, array{headers: array, rows: array}>
+     */
+    public static function sheets(?string $salt = null): array
     {
+        $salt ??= self::SALT;
         $now = '2026-01-01T00:00:00+07:00';
-        $pinHash = sha256(self::SALT.':'.self::INITIAL_PIN);
+        $pinHash = sha256($salt.':'.self::INITIAL_PIN);
 
         return [
             'Tables' => [
