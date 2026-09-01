@@ -11,7 +11,8 @@ use Illuminate\Support\Facades\Http;
 // / an access token, cached in Redis until near expiry. (back.md §3.1)
 class GoogleTokenProvider
 {
-    private const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+    // spreadsheets (read/write) + drive.file (create + share spreadsheets the app makes).
+    private const SCOPE = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
 
     private const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 

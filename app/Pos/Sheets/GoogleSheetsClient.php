@@ -59,6 +59,32 @@ class GoogleSheetsClient implements SheetsClient
         }
     }
 
+    /** Creates a spreadsheet with the given sheet tabs; returns its id. */
+    public function createSpreadsheet(string $title, array $sheetNames): string
+    {
+        $res = Http::withToken($this->tokens->accessToken())->acceptJson()->post(
+            'https://sheets.googleapis.com/v4/spreadsheets',
+            [
+                'properties' => ['title' => $title],
+                'sheets' => array_map(fn ($n) => ['properties' => ['title' => $n]], $sheetNames),
+            ],
+        );
+        if (! $res->ok() || ! $res->json('spreadsheetId')) {
+            throw new AppError('SHEETS_ERROR', 'สร้าง Spreadsheet ไม่สำเร็จ');
+        }
+
+        return (string) $res->json('spreadsheetId');
+    }
+
+    /** Shares a spreadsheet (Drive permission) with an email as writer. */
+    public function shareWith(string $spreadsheetId, string $email): void
+    {
+        Http::withToken($this->tokens->accessToken())->acceptJson()->post(
+            "https://www.googleapis.com/drive/v3/files/{$spreadsheetId}/permissions",
+            ['role' => 'writer', 'type' => 'user', 'emailAddress' => $email],
+        );
+    }
+
     public function batchGet(array $ranges): array
     {
         $query = implode('&', array_map(fn ($r) => 'ranges='.rawurlencode($r), $ranges));
