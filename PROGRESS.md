@@ -11,7 +11,7 @@ Branch: `feature/laravel-backend`. Models per `AGENTS.md §4.5`.
 | T0 | git branch + deps (jwt, predis) + install:api + config | luna | ✅ |
 | T1 | Helpers + AppError + envelope exception handler | luna | ✅ |
 | T2 | SheetsClient interface + FakeSheetsClient | luna | ✅ |
-| T3 | SheetRepository (CRUD) | terra | ⬜ |
+| T3 | SheetRepository (CRUD) | terra | ✅ |
 | T8a | SeedData + seedDefaults *(after T3, per override)* | luna | ⬜ |
 | T4 | LockManager + IdempotencyManager | **sol** | ⬜ |
 | T5 | SettingsService + CatalogService | terra | ⬜ |
