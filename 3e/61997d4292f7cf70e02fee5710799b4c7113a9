@@ -1,0 +1,23 @@
+phpunit.xml
+  s_ac235bdd8b9dc7::t_9e4e6fc1051607 26
+app/Pos/Sheets/SeedData.php
+  s_ac235bdd8b9dc7::t_270dbe3bdea8e6 16-22,24,26
+app/Console/Commands/PosSetup.php
+  s_ac235bdd8b9dc7::t_ac092348776038 21-23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "3e61997d4292f7cf70e02fee5710799b4c7113a9",
+  "prompts": {},
+  "sessions": {
+    "s_ac235bdd8b9dc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0ee4f32-2778-42a1-bf1d-2bd3d8ba1620",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Piya Miang-lae <piyaboy097@gmail.com>"
+    }
+  }
+}
