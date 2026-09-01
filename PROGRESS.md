@@ -20,7 +20,7 @@ Branch: `feature/laravel-backend`. Models per `AGENTS.md §4.5`.
 | T8 | pos:setup command (remaining) | luna | ✅ |
 | T9 | AdminService (CRUD/settings/archive/rotate) | terra | ✅ |
 | T10 | Routes + controllers + GoogleSheetsClient (JWT/CORS/throttle) | **sol** | ✅ |
-| T11 | Manual smoke test (real Sheets) | terra | ⏳ code-ready, manual pending (needs Google SA key + Redis) |
+| T11 | Manual smoke test (real Sheets) | terra | ✅ passed on live spreadsheet (bootstrap/submit/dashboard/status/close all 200) |
 
 **Gate (Phase 2 done)**: `phpunit` green (unit+feature) + `pint --test` clean + security review (`security.md §3-4`) + smoke test (T11) passes on a throwaway spreadsheet.
 
@@ -30,7 +30,7 @@ Branch: `feature/laravel-backend`. Models per `AGENTS.md §4.5`.
 | Task | งาน | Model | สถานะ |
 |---|---|---|---|
 | P3-T3 | CORS origin restrict + serve config | terra | ⬜ |
-| P3-T4 | E2E smoke (with frontend) | terra | ⬜ |
+| P3-T4 | E2E smoke (with frontend) | terra | ✅ full flow verified in Chrome vs live Sheets: customer order → kitchen NEW→COOKING → cashier close+receipt |
 
 ## Phase 5 — Enhancements (opt-in) · plan `plan-enhance.md`
 Do NOT start unless told. E1 Reverb realtime, E3 Drive upload, E4 PDF, E5 MySQL mirror. Add rows when picked.
