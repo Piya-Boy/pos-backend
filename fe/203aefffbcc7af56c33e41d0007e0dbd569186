@@ -1,0 +1,29 @@
+.env.example
+  s_ac235bdd8b9dc7::t_751e28d1b88e68 66-77
+config/pos.php
+  s_ac235bdd8b9dc7::t_5360f6b857dfca 1-16
+bootstrap/app.php
+  s_ac235bdd8b9dc7::t_88bd81827ab8fb 10
+composer.json
+  s_ac235bdd8b9dc7::t_cbb54fad3cf810 10,12-13
+composer.lock
+  s_ac235bdd8b9dc7::t_59a1c5a06c1556 7,511-576,2678-2740
+routes/api.php
+  s_ac235bdd8b9dc7::t_5a4c7f3105bbc0 1-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "fe203aefffbcc7af56c33e41d0007e0dbd569186",
+  "prompts": {},
+  "sessions": {
+    "s_ac235bdd8b9dc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0ee4f32-2778-42a1-bf1d-2bd3d8ba1620",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Piya Miang-lae <piyaboy097@gmail.com>"
+    }
+  }
+}
