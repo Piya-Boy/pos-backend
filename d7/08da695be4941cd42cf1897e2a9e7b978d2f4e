@@ -1,0 +1,28 @@
+tests/Feature/OrderServiceTest.php
+  s_ac235bdd8b9dc7::t_a46a7181b7b9d7 1-60
+  s_ac235bdd8b9dc7::t_d6227b41b21ab3 61
+app/Pos/Services/OrderService.php
+  s_ac235bdd8b9dc7::t_19fd7ef3a8271d 1-289
+  s_ac235bdd8b9dc7::t_bae314262aad64 290
+app/Pos/Support/Totals.php
+  s_ac235bdd8b9dc7::t_1351a235e4689d 1-85
+  s_ac235bdd8b9dc7::t_39e544664e4b52 86
+tests/Feature/TotalsTest.php
+  s_ac235bdd8b9dc7::t_c5d32d108de6df 1-54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "d708da695be4941cd42cf1897e2a9e7b978d2f4e",
+  "prompts": {},
+  "sessions": {
+    "s_ac235bdd8b9dc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0ee4f32-2778-42a1-bf1d-2bd3d8ba1620",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Piya Miang-lae <piyaboy097@gmail.com>"
+    }
+  }
+}
