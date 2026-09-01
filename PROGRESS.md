@@ -8,7 +8,7 @@ Branch: `feature/laravel-backend`. Models per `AGENTS.md §4.5`.
 
 | Task | งาน | Model | สถานะ |
 |---|---|---|---|
-| T0 | git branch + deps (jwt, predis) + install:api + config | luna | ⬜ |
+| T0 | git branch + deps (jwt, predis) + install:api + config | luna | ✅ |
 | T1 | Helpers + AppError + envelope exception handler | luna | ⬜ |
 | T2 | SheetsClient interface + FakeSheetsClient | luna | ⬜ |
 | T3 | SheetRepository (CRUD) | terra | ⬜ |
