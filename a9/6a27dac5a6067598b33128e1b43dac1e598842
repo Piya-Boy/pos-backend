@@ -1,0 +1,29 @@
+app/Pos/Services/OpsService.php
+  s_ac235bdd8b9dc7::t_9e9784b5d0637a 19-24
+app/Pos/Sheets/SheetRepository.php
+  s_ac235bdd8b9dc7::t_97185625a35ac6 7,14-18,20,39-56,79-93
+  s_ac235bdd8b9dc7::t_85ebb023fe404a 61-66
+  s_ac235bdd8b9dc7::t_e53ca97f24840d 6
+  s_ac235bdd8b9dc7::t_91ec14a53b8659 19
+  s_ac235bdd8b9dc7::t_c679500e40b824 57
+app/Pos/Services/OrderService.php
+  s_ac235bdd8b9dc7::t_f06ca0e8819415 253-254
+app/Pos/Services/AuthService.php
+  s_ac235bdd8b9dc7::t_58a1b0c96d7bf4 109-113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "a96a27dac5a6067598b33128e1b43dac1e598842",
+  "prompts": {},
+  "sessions": {
+    "s_ac235bdd8b9dc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0ee4f32-2778-42a1-bf1d-2bd3d8ba1620",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Piya Miang-lae <piyaboy097@gmail.com>"
+    }
+  }
+}
