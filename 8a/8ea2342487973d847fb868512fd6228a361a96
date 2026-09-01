@@ -1,0 +1,23 @@
+tests/Unit/IdempotencyManagerTest.php
+  s_ac235bdd8b9dc7::t_c1fcbb78e674e5 1-38
+app/Pos/Support/IdempotencyManager.php
+  s_ac235bdd8b9dc7::t_a14c91c2523385 1-63
+app/Pos/Support/LockManager.php
+  s_ac235bdd8b9dc7::t_6a1fd59c47d5df 1-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "8a8ea2342487973d847fb868512fd6228a361a96",
+  "prompts": {},
+  "sessions": {
+    "s_ac235bdd8b9dc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0ee4f32-2778-42a1-bf1d-2bd3d8ba1620",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Piya Miang-lae <piyaboy097@gmail.com>"
+    }
+  }
+}
