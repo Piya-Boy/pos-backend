@@ -41,6 +41,10 @@ class PosSetup extends Command
             return self::SUCCESS;
         }
 
+        if ($client instanceof GoogleSheetsClient) {
+            $client->ensureSheets($names);
+        }
+
         foreach ($defs as $name => $def) {
             $existing = $client->getValues($name.'!A1:ZZ');
             if (empty($existing)) {

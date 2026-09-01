@@ -76,6 +76,32 @@ class GoogleSheetsClient implements SheetsClient
         return (string) $res->json('spreadsheetId');
     }
 
+    /** Adds any missing sheet tabs (batchUpdate addSheet). Idempotent. */
+    public function ensureSheets(array $sheetNames): void
+    {
+        $meta = Http::withToken($this->tokens->accessToken())->acceptJson()
+            ->get($this->base().'?fields=sheets.properties.title');
+        if (! $meta->ok()) {
+            throw new AppError('SHEETS_ERROR', 'อ่านโครงสร้าง Spreadsheet ไม่สำเร็จ');
+        }
+        $have = collect($meta->json('sheets', []))
+            ->map(fn ($s) => (string) ($s['properties']['title'] ?? ''))->all();
+        $requests = [];
+        foreach ($sheetNames as $name) {
+            if (! in_array($name, $have, true)) {
+                $requests[] = ['addSheet' => ['properties' => ['title' => $name]]];
+            }
+        }
+        if (empty($requests)) {
+            return;
+        }
+        $res = Http::withToken($this->tokens->accessToken())->acceptJson()
+            ->post($this->base().':batchUpdate', ['requests' => $requests]);
+        if (! $res->ok()) {
+            throw new AppError('SHEETS_ERROR', 'สร้างชีทไม่สำเร็จ');
+        }
+    }
+
     /** Shares a spreadsheet (Drive permission) with an email as writer. */
     public function shareWith(string $spreadsheetId, string $email): void
     {
