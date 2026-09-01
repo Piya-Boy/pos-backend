@@ -13,7 +13,7 @@ Branch: `feature/laravel-backend`. Models per `AGENTS.md §4.5`.
 | T2 | SheetsClient interface + FakeSheetsClient | luna | ✅ |
 | T3 | SheetRepository (CRUD) | terra | ✅ |
 | T8a | SeedData + seedDefaults *(after T3, per override)* | luna | ✅ |
-| T4 | LockManager + IdempotencyManager | **sol** | ⬜ |
+| T4 | LockManager + IdempotencyManager | **sol** | ✅ |
 | T5 | SettingsService + CatalogService | terra | ⬜ |
 | T6 | Totals + OrderService | **sol** | ⬜ |
 | T7 | Auth + middleware + Ops + Payment services | **sol** | ⬜ |
