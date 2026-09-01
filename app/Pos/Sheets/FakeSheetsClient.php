@@ -67,10 +67,29 @@ class FakeSheetsClient implements SheetsClient
         return $out;
     }
 
-    /** Seeds the 14 sheets with default data. Implemented in Task 8a (SeedData). */
+    /** Seeds the 14 sheets with default data (SeedData). */
     public function seedDefaults(): static
     {
-        // filled in Task 8a
+        foreach (SeedData::sheets() as $name => $def) {
+            $this->sheets[$name] = [];
+            $this->sheets[$name][] = array_map('strval', $def['headers']);
+            foreach ($def['rows'] as $row) {
+                $this->sheets[$name][] = array_map(static fn ($v) => (string) $v, $row);
+            }
+        }
+
         return $this;
+    }
+
+    /** First seeded table Token (for tests). */
+    public function firstTableToken(): string
+    {
+        $tables = $this->sheets['Tables'] ?? [];
+        if (count($tables) < 2) {
+            return '';
+        }
+        $tokenCol = array_search('Token', $tables[0], true);
+
+        return $tokenCol === false ? '' : (string) ($tables[1][$tokenCol] ?? '');
     }
 }
