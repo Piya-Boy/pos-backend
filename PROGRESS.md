@@ -17,8 +17,8 @@ Branch: `feature/laravel-backend`. Models per `AGENTS.md §4.5`.
 | T5 | SettingsService + CatalogService | terra | ✅ |
 | T6 | Totals + OrderService | **sol** | ✅ |
 | T7 | Auth + middleware + Ops + Payment services | **sol** | ✅ |
-| T8 | pos:setup command (remaining) | luna | ⬜ |
-| T9 | AdminService (CRUD/settings/archive/rotate) | terra | ⬜ |
+| T8 | pos:setup command (remaining) | luna | ✅ |
+| T9 | AdminService (CRUD/settings/archive/rotate) | terra | ✅ |
 | T10 | Routes + controllers + GoogleSheetsClient (JWT/CORS/throttle) | **sol** | ⬜ |
 | T11 | Manual smoke test (real Sheets) | terra | ⬜ |
 
