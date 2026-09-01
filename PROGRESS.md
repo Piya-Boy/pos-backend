@@ -19,7 +19,7 @@ Branch: `feature/laravel-backend`. Models per `AGENTS.md §4.5`.
 | T7 | Auth + middleware + Ops + Payment services | **sol** | ✅ |
 | T8 | pos:setup command (remaining) | luna | ✅ |
 | T9 | AdminService (CRUD/settings/archive/rotate) | terra | ✅ |
-| T10 | Routes + controllers + GoogleSheetsClient (JWT/CORS/throttle) | **sol** | ⬜ |
+| T10 | Routes + controllers + GoogleSheetsClient (JWT/CORS/throttle) | **sol** | ✅ |
 | T11 | Manual smoke test (real Sheets) | terra | ⬜ |
 
 **Gate (Phase 2 done)**: `phpunit` green (unit+feature) + `pint --test` clean + security review (`security.md §3-4`) + smoke test (T11) passes on a throwaway spreadsheet.
