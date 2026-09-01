@@ -1,0 +1,38 @@
+app/Providers/AppServiceProvider.php
+  s_ac235bdd8b9dc7::t_2ec39290b3c25d 22-26
+  s_ac235bdd8b9dc7::t_6e8551cb643003 5-6
+app/Http/Controllers/Api/AdminController.php
+  s_ac235bdd8b9dc7::t_18d6cad500a695 1-55
+config/cors.php
+  s_ac235bdd8b9dc7::t_3bd2c06503c5d8 1-16
+app/Http/Controllers/Api/CustomerController.php
+  s_ac235bdd8b9dc7::t_02a2df404a3d8d 1-53
+app/Pos/Sheets/GoogleSheetsClient.php
+  s_ac235bdd8b9dc7::t_ea38bf39687918 1-77
+app/Http/Controllers/Api/OpsController.php
+  s_ac235bdd8b9dc7::t_482c6f7fec41b6 1-42
+app/Pos/Sheets/GoogleTokenProvider.php
+  s_ac235bdd8b9dc7::t_0c3a553ed1f791 1-65
+routes/api.php
+  s_ac235bdd8b9dc7::t_8f137c2dc8668a 3-6,9-36
+app/Http/Controllers/Api/AuthController.php
+  s_ac235bdd8b9dc7::t_a1ac9988d68b3e 1-33
+tests/Feature/ApiRoutesTest.php
+  s_ac235bdd8b9dc7::t_a78e7758a2ec35 1-56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "b54fe8346e09c690ecc8034822b754e7a2c94503",
+  "prompts": {},
+  "sessions": {
+    "s_ac235bdd8b9dc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0ee4f32-2778-42a1-bf1d-2bd3d8ba1620",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Piya Miang-lae <piyaboy097@gmail.com>"
+    }
+  }
+}
