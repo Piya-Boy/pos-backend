@@ -1,0 +1,28 @@
+app/Pos/Services/SettingsService.php
+  s_ac235bdd8b9dc7::t_d741e5748c00ed 6,9
+  s_ac235bdd8b9dc7::t_224249eaf97c17 35-108
+tests/Feature/AdminServiceTest.php
+  s_ac235bdd8b9dc7::t_e85174a4c308c8 1-48
+app/Console/Commands/PosSetup.php
+  s_ac235bdd8b9dc7::t_e918e1ada75f0e 1-8,11-40
+  s_ac235bdd8b9dc7::t_46fe5c6ba27453 9-10
+app/Pos/Services/AdminService.php
+  s_ac235bdd8b9dc7::t_b57f640be24830 1-4,6-14,16-103,105-210
+  s_ac235bdd8b9dc7::t_46fe5c6ba27453 5,15,104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "a2b2ea550595f0fe1cafa9b3261b3bdf5f5f577b",
+  "prompts": {},
+  "sessions": {
+    "s_ac235bdd8b9dc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0ee4f32-2778-42a1-bf1d-2bd3d8ba1620",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Piya Miang-lae <piyaboy097@gmail.com>"
+    }
+  }
+}
