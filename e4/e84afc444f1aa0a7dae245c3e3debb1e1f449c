@@ -1,0 +1,31 @@
+app/Pos/Sheets/SheetRepository.php
+  s_ac235bdd8b9dc7::t_19ac2043f6bae2 130
+  s_ac235bdd8b9dc7::t_f90550f0ad34b5 12-21,24-34,37,45
+  s_ac235bdd8b9dc7::t_dc7d150f0671e4 94
+  s_ac235bdd8b9dc7::t_fc4f0b16f76f78 132-139
+  s_ac235bdd8b9dc7::t_48934789d46b5a 99
+app/Providers/AppServiceProvider.php
+  s_ac235bdd8b9dc7::t_0c0c8aba414653 21-23
+app/Pos/Services/CatalogService.php
+  s_ac235bdd8b9dc7::t_e1197603dc1d7e 20-39
+  s_ac235bdd8b9dc7::t_cd2197cec276e3 121
+app/Pos/Services/AdminService.php
+  s_ac235bdd8b9dc7::t_9f4d1fae8cf8ba 166
+  s_ac235bdd8b9dc7::t_10e64d9e697697 111,147
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "e4e84afc444f1aa0a7dae245c3e3debb1e1f449c",
+  "prompts": {},
+  "sessions": {
+    "s_ac235bdd8b9dc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0ee4f32-2778-42a1-bf1d-2bd3d8ba1620",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Piya Miang-lae <piyaboy097@gmail.com>"
+    }
+  }
+}
