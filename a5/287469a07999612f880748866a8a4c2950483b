@@ -1,0 +1,24 @@
+app/Pos/Sheets/FakeSheetsClient.php
+  s_ac235bdd8b9dc7::t_93121683228882 70,73-80,83-93
+  s_ac235bdd8b9dc7::t_7ad22776cf4171 94
+app/Pos/Sheets/SeedData.php
+  s_ac235bdd8b9dc7::t_516087157efeb9 1-166
+tests/Unit/SeedDataTest.php
+  s_ac235bdd8b9dc7::t_0a92baff6a5ea5 1-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "a5287469a07999612f880748866a8a4c2950483b",
+  "prompts": {},
+  "sessions": {
+    "s_ac235bdd8b9dc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0ee4f32-2778-42a1-bf1d-2bd3d8ba1620",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Piya Miang-lae <piyaboy097@gmail.com>"
+    }
+  }
+}
