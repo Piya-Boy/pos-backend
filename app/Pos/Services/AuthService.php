@@ -106,7 +106,11 @@ class AuthService
         if (! $session) {
             throw new AppError('AUTH_EXPIRED', 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่');
         }
-        $staff = $this->repo->find('Staff', 'StaffID', (string) $session['staffId']);
+        // allCached: resolve() runs on every authed request (every poll). A few
+        // seconds of staleness on Staff is fine — archiving an account writes to
+        // Staff, which invalidates this cache. Login/PIN changes read fresh below.
+        $staff = collect($this->repo->allCached('Staff'))
+            ->first(fn ($r) => (string) $r['StaffID'] === (string) $session['staffId']);
         if (! $staff || (string) $staff['Status'] !== 'ACTIVE') {
             throw new AppError('PERMISSION_DENIED', 'บัญชีนี้ไม่พร้อมใช้งาน');
         }

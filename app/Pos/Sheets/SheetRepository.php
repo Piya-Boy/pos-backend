@@ -3,12 +3,21 @@
 namespace App\Pos\Sheets;
 
 use App\Pos\Support\AppError;
+use Illuminate\Container\Container;
+use Illuminate\Support\Facades\Cache;
 
 // / Row <-> assoc-array mapping over SheetsClient. Ports cp-pos Database.js
 // / (readSheetObjects_/findObject_/appendObjects_/updateObject_/upsertObject_).
 // / Write path always reads fresh (never cached) so _row indexes are valid.
 class SheetRepository
 {
+    /**
+     * TTL (seconds) for the cross-request micro-cache used only by allCached().
+     * Kept tiny so live displays (kitchen/cashier/customer polling) stay near
+     * real-time while many concurrent pollers collapse onto one Google read.
+     */
+    private const MICRO_TTL = 5;
+
     /**
      * Request-scoped memo of raw sheet values, keyed by sheet name. A single
      * customer/dashboard request reads the same sheet several times (find calls
@@ -27,9 +36,34 @@ class SheetRepository
         return $this->memo[$sheet] ??= $this->client->getValues($sheet.'!A1:ZZ');
     }
 
+    /**
+     * Like values() but backed by a very short cross-request cache. Use ONLY on
+     * read-only poll paths (dashboards, order status) where a ~2s lag is fine.
+     * NEVER on a write path: cached _row indexes could be stale by write time.
+     */
+    private function valuesCached(string $sheet): array
+    {
+        if (isset($this->memo[$sheet])) {
+            return $this->memo[$sheet];
+        }
+        $values = Cache::remember(
+            'pos:sheet:'.$sheet,
+            self::MICRO_TTL,
+            fn () => $this->client->getValues($sheet.'!A1:ZZ'),
+        );
+
+        return $this->memo[$sheet] = $values;
+    }
+
     private function forgetSheet(string $sheet): void
     {
         unset($this->memo[$sheet]);
+        // Guard: pure-unit tests exercise the repo without booting the framework,
+        // so the cache facade may be unavailable. The micro-cache is a runtime-only
+        // optimization — skipping it when there's no container is safe.
+        if (Container::getInstance()->bound('cache')) {
+            Cache::forget('pos:sheet:'.$sheet);
+        }
     }
 
     private function headers(string $sheet): array
@@ -42,7 +76,21 @@ class SheetRepository
     /** All rows as assoc arrays with `_row` (1-based sheet row). Skips empty rows. */
     public function all(string $sheet): array
     {
-        $values = $this->values($sheet);
+        return $this->rowsFrom($this->values($sheet));
+    }
+
+    /**
+     * Read-only variant of all() for poll paths — see valuesCached().
+     * Do not use where the result feeds a subsequent write.
+     */
+    public function allCached(string $sheet): array
+    {
+        return $this->rowsFrom($this->valuesCached($sheet));
+    }
+
+    /** @param array<int, array<int, string>> $values */
+    private function rowsFrom(array $values): array
+    {
         if (count($values) < 2) {
             return [];
         }

@@ -16,10 +16,12 @@ class OpsService
     public function dashboard(array $session, string $view): array
     {
         $view = strtoupper($view);
-        $tables = collect($this->repo->all('Tables'))->keyBy(fn ($t) => (string) $t['TableID']);
-        $sessions = collect($this->repo->all('OrderSessions'));
-        $items = collect($this->repo->all('OrderItems'));
-        $calls = collect($this->repo->all('CallLogs'));
+        // Read-only dashboard: short micro-cache so concurrent kitchen/cashier
+        // pollers collapse onto one Google read. Writes invalidate these sheets.
+        $tables = collect($this->repo->allCached('Tables'))->keyBy(fn ($t) => (string) $t['TableID']);
+        $sessions = collect($this->repo->allCached('OrderSessions'));
+        $items = collect($this->repo->allCached('OrderItems'));
+        $calls = collect($this->repo->allCached('CallLogs'));
         $sessionMap = $sessions->keyBy(fn ($s) => (string) $s['SessionID']);
 
         $activeItems = $items->filter(function ($item) use ($sessionMap) {

@@ -250,8 +250,8 @@ class OrderService
         if (! $session) {
             return null;
         }
-        $items = collect($this->repo->all('OrderItems'))->filter(fn ($i) => (string) $i['SessionID'] === $sessionId);
-        $calls = collect($this->repo->all('CallLogs'))->filter(fn ($c) => (string) $c['SessionID'] === $sessionId);
+        $items = collect($this->repo->allCached('OrderItems'))->filter(fn ($i) => (string) $i['SessionID'] === $sessionId);
+        $calls = collect($this->repo->allCached('CallLogs'))->filter(fn ($c) => (string) $c['SessionID'] === $sessionId);
 
         $clean = $this->publicRow($session);
         $billPending = $calls->contains(fn ($c) => (string) $c['Type'] === 'BILL' && in_array((string) $c['Status'], ['OPEN', 'ASSIGNED'], true));
