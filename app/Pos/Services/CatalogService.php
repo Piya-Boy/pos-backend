@@ -17,6 +17,26 @@ class CatalogService
     public function clearCatalogCache(): void
     {
         Cache::forget('pos:public-catalog');
+        Cache::forget('pos:tables');
+    }
+
+    /**
+     * Tables keyed by Token, cached briefly. Short TTL because a rotated or
+     * disabled QR must stop working soon; admin writes to Tables also call
+     * clearCatalogCache() for immediate invalidation.
+     *
+     * @return array<string, array>
+     */
+    private function tablesByToken(): array
+    {
+        return Cache::remember('pos:tables', 15, function () {
+            $out = [];
+            foreach ($this->repo->all('Tables') as $row) {
+                $out[(string) $row['Token']] = $row;
+            }
+
+            return $out;
+        });
     }
 
     public function publicCatalog(): array
@@ -98,7 +118,7 @@ class CatalogService
         if ($tableToken === '') {
             throw new AppError('TABLE_REQUIRED', 'ไม่พบข้อมูลโต๊ะ กรุณาสแกน QR ใหม่');
         }
-        $table = $this->repo->find('Tables', 'Token', $tableToken);
+        $table = $this->tablesByToken()[$tableToken] ?? null;
         if (! $table || (string) $table['Status'] === 'DISABLED') {
             throw new AppError('TABLE_NOT_FOUND', 'QR โต๊ะนี้ไม่พร้อมใช้งาน');
         }

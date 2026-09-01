@@ -18,7 +18,9 @@ class AppServiceProvider extends ServiceProvider
         // SheetsClient: real GoogleSheetsClient in prod (bound in Task 10).
         // In testing, feature tests bind a FakeSheetsClient via $this->app->instance().
         // SheetRepository + POS services resolve the bound SheetsClient.
-        $this->app->bind(SheetRepository::class, fn ($app) => new SheetRepository($app->make(SheetsClient::class)));
+        // scoped: one instance per request so the repo's request-scoped read memo
+        // is shared across all POS services in that request, and reset between requests.
+        $this->app->scoped(SheetRepository::class, fn ($app) => new SheetRepository($app->make(SheetsClient::class)));
 
         // Real Sheets client in non-test envs. Tests inject FakeSheetsClient via instance().
         if (! $this->app->environment('testing')) {

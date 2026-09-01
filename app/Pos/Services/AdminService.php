@@ -108,7 +108,7 @@ class AdminService
             throw new AppError('PIN_REQUIRED', 'พนักงานใหม่ต้องมี PIN 6–12 ตัว');
         }
         $saved = $this->repo->upsert($cfg['sheet'], $cfg['key'], $object);
-        if (in_array($entity, ['category', 'menu', 'option', 'addon', 'promotion'], true)) {
+        if (in_array($entity, ['category', 'menu', 'option', 'addon', 'promotion', 'table'], true)) {
             $this->catalog->clearCatalogCache();
         }
         $this->audit((string) $session['staffId'], 'SAVE_'.strtoupper($entity), $cfg['sheet'], (string) $object[$cfg['key']]);
@@ -144,7 +144,7 @@ class AdminService
             }
         }
         $updated = $this->repo->update($cfg['sheet'], $cfg['key'], $id, ['Status' => 'ARCHIVED', 'UpdatedAt' => nowIso()]);
-        if (in_array($entity, ['category', 'menu', 'option', 'addon', 'promotion'], true)) {
+        if (in_array($entity, ['category', 'menu', 'option', 'addon', 'promotion', 'table'], true)) {
             $this->catalog->clearCatalogCache();
         }
         $this->audit((string) $session['staffId'], 'ARCHIVE_'.strtoupper($entity), $cfg['sheet'], $id);
@@ -163,6 +163,7 @@ class AdminService
             throw new AppError('TABLE_IN_USE', 'ไม่สามารถเปลี่ยน QR ขณะโต๊ะกำลังใช้งาน');
         }
         $updated = $this->repo->update('Tables', 'TableID', $tableId, ['Token' => uuidPrefixed('tbl_'), 'UpdatedAt' => nowIso()]);
+        $this->catalog->clearCatalogCache(); // drops the old token from the tables cache
         $this->audit((string) $session['staffId'], 'ROTATE_TABLE_TOKEN', 'Table', $tableId);
 
         return $this->publicRow($updated);
