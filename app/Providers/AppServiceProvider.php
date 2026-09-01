@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Pos\Sheets\GoogleSheetsClient;
+use App\Pos\Sheets\GoogleTokenProvider;
 use App\Pos\Sheets\SheetRepository;
 use App\Pos\Sheets\SheetsClient;
 use Illuminate\Support\ServiceProvider;
@@ -17,6 +19,11 @@ class AppServiceProvider extends ServiceProvider
         // In testing, feature tests bind a FakeSheetsClient via $this->app->instance().
         // SheetRepository + POS services resolve the bound SheetsClient.
         $this->app->bind(SheetRepository::class, fn ($app) => new SheetRepository($app->make(SheetsClient::class)));
+
+        // Real Sheets client in non-test envs. Tests inject FakeSheetsClient via instance().
+        if (! $this->app->environment('testing')) {
+            $this->app->singleton(SheetsClient::class, fn ($app) => new GoogleSheetsClient($app->make(GoogleTokenProvider::class)));
+        }
     }
 
     /**
