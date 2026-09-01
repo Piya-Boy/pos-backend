@@ -1,0 +1,21 @@
+app/Pos/Sheets/GoogleSheetsClient.php
+  s_ac235bdd8b9dc7::t_770a47a2b33194 79-104
+app/Console/Commands/PosSetup.php
+  s_ac235bdd8b9dc7::t_557cb4af3651a5 44-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "143729909b7589a8d4a520354194d0d47d8ccb4f",
+  "prompts": {},
+  "sessions": {
+    "s_ac235bdd8b9dc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0ee4f32-2778-42a1-bf1d-2bd3d8ba1620",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Piya Miang-lae <piyaboy097@gmail.com>"
+    }
+  }
+}
