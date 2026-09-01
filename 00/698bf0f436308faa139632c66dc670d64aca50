@@ -1,0 +1,33 @@
+tests/Feature/AuthServiceTest.php
+  s_ac235bdd8b9dc7::t_478a64492b12e2 1-48
+app/Pos/Services/PaymentService.php
+  s_ac235bdd8b9dc7::t_155f09286c8e8c 1-135
+app/Http/Middleware/StaffAuth.php
+  s_ac235bdd8b9dc7::t_435cc29716fcd4 1-23
+app/Pos/Services/AuthService.php
+  s_ac235bdd8b9dc7::t_413201f447b484 1-130
+  s_ac235bdd8b9dc7::t_ff4146d76f4287 131
+bootstrap/app.php
+  s_ac235bdd8b9dc7::t_7868fcfff1ca72 18
+  s_ac235bdd8b9dc7::t_c0b41f1b8cb045 3
+tests/Feature/PaymentServiceTest.php
+  s_ac235bdd8b9dc7::t_abcc7e548bf73e 1-39
+app/Pos/Services/OpsService.php
+  s_ac235bdd8b9dc7::t_58979aeed66382 1-130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "00698bf0f436308faa139632c66dc670d64aca50",
+  "prompts": {},
+  "sessions": {
+    "s_ac235bdd8b9dc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0ee4f32-2778-42a1-bf1d-2bd3d8ba1620",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Piya Miang-lae <piyaboy097@gmail.com>"
+    }
+  }
+}
