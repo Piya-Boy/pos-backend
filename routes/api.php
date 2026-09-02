@@ -33,4 +33,5 @@ Route::middleware('staff.auth:ADMIN')->group(function () {
     Route::post('/admin/entity', [AdminController::class, 'entity']);
     Route::post('/admin/entity/archive', [AdminController::class, 'entityArchive']);
     Route::post('/admin/table/rotate-token', [AdminController::class, 'rotateToken']);
+    Route::post('/admin/upload-image', [AdminController::class, 'uploadImage'])->middleware('throttle:20,1');
 });

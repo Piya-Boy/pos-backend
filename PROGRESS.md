@@ -33,6 +33,11 @@ Branch: `feature/laravel-backend`. Models per `AGENTS.md §4.5`.
 | P3-T4 | E2E smoke (with frontend) | terra | ✅ full flow verified in Chrome vs live Sheets: customer order → kitchen NEW→COOKING → cashier close+receipt |
 
 ## Phase 5 — Enhancements (opt-in) · plan `plan-enhance.md`
-Do NOT start unless told. E1 Reverb realtime, E3 Drive upload, E4 PDF, E5 MySQL mirror. Add rows when picked.
+| Epic | งาน | สถานะ |
+|---|---|---|
+| E3 | Drive image upload | ✅ ImageUploadService (magic-byte mime check, ≤7MB, Drive multipart + anyone-reader) + POST /admin/upload-image (throttle 20/1) + 3 tests |
+| E5 | MySQL mirror | ⏭️ skipped per plan — Redis micro-cache handles load; only build if real 429s appear |
+
+Do NOT start remaining unless told. E1 Reverb realtime, E4 PDF (frontend repo).
 
 **Build order**: finish Phase 2 → Phase 3 → Phase 5 epics as requested.

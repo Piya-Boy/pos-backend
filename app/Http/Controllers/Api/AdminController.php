@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Pos\Services\AdminService;
+use App\Pos\Services\ImageUploadService;
 use App\Pos\Services\SettingsService;
 use Illuminate\Http\Request;
 
@@ -13,6 +14,7 @@ class AdminController
     public function __construct(
         private AdminService $admin,
         private SettingsService $settings,
+        private ImageUploadService $images,
     ) {}
 
     private function user(Request $r): array
@@ -51,5 +53,10 @@ class AdminController
     public function rotateToken(Request $r)
     {
         return response()->json(apiOk($this->admin->rotateToken($this->user($r), (string) $r->input('tableId', ''))));
+    }
+
+    public function uploadImage(Request $r)
+    {
+        return response()->json(apiOk(['url' => $this->images->upload($r->file('image'))]));
     }
 }
