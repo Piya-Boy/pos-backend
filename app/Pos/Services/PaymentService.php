@@ -2,6 +2,7 @@
 
 namespace App\Pos\Services;
 
+use App\Events\OpsEvent;
 use App\Pos\Sheets\SheetRepository;
 use App\Pos\Support\AppError;
 use App\Pos\Support\IdempotencyManager;
@@ -95,6 +96,7 @@ class PaymentService
             'tableReset' => (bool) $table,
         ];
         $this->audit((string) $staff['staffId'], 'CLOSE_TABLE', 'OrderSession', (string) $session['SessionID'], ['amount' => $totals['total'], 'method' => $method]);
+        OpsEvent::dispatch('SESSION_CLOSED', $table ? (string) $table['Token'] : '');
 
         return $result;
     }

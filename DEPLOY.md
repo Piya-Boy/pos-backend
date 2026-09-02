@@ -80,6 +80,36 @@ server {
 Redirect port 80 → 443. Let CORS (not nginx) handle cross-origin — the app already
 emits the right headers from `POS_FRONTEND_ORIGIN`.
 
+### Realtime (Reverb) — optional but recommended
+The app broadcasts order/call/session changes over WebSocket (Pusher protocol)
+so staff/customer screens update without waiting for the poll. If you skip this,
+everything still works via polling (5–10s) — realtime is purely additive.
+
+Run the Reverb daemon under a process supervisor (systemd/supervisor):
+```ini
+# /etc/supervisor/conf.d/reverb.conf
+[program:phius-reverb]
+command=php /var/www/pos-backend/artisan reverb:start --host=0.0.0.0 --port=8080
+autostart=true
+autorestart=true
+user=www-data
+```
+`.env` already holds `REVERB_APP_ID/KEY/SECRET` (set by `reverb:install`) and
+`BROADCAST_CONNECTION=reverb`. Broadcasting is synchronous (`ShouldBroadcastNow`),
+so **no queue worker is required**. Expose the WS port over TLS via nginx:
+```nginx
+# under the API server block, or a dedicated ws.phius.example host
+location /app/ {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "Upgrade";
+    proxy_set_header Host $host;
+}
+```
+The Flutter build must be pointed at it (see below): `REVERB_HOST`, `REVERB_PORT`,
+`REVERB_SCHEME=https`.
+
 ---
 
 ## 2. Frontend (Flutter web)
@@ -89,8 +119,13 @@ The API base URL is compiled in at build time via `--dart-define`.
 ```bash
 cd pos-frontend
 flutter build web --release \
-  --dart-define=POS_API_BASE_URL=https://api.phius.example
+  --dart-define=POS_API_BASE_URL=https://api.phius.example \
+  --dart-define=REVERB_APP_KEY=<REVERB_APP_KEY from backend .env> \
+  --dart-define=REVERB_HOST=ws.phius.example \
+  --dart-define=REVERB_PORT=443 \
+  --dart-define=REVERB_SCHEME=https
 # output: build/web
+# Omit the REVERB_* defines to ship polling-only (realtime disabled at runtime).
 ```
 
 ### nginx (frontend) — static + SPA fallback

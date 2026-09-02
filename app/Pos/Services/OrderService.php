@@ -2,6 +2,7 @@
 
 namespace App\Pos\Services;
 
+use App\Events\OpsEvent;
 use App\Pos\Sheets\SheetRepository;
 use App\Pos\Support\AppError;
 use App\Pos\Support\IdempotencyManager;
@@ -154,6 +155,7 @@ class OrderService
         $promoCode = strtoupper(normalizeText($input['promoCode'] ?? $session['PromoCode'] ?? '', 40));
         $totals = Totals::calculate($this->repo, $this->settings, $sid, $promoCode);
         $this->audit('CUSTOMER', 'SUBMIT_ORDER', 'OrderSession', $sid, ['itemCount' => count($orderRows), 'tableId' => $table['TableID']]);
+        OpsEvent::dispatch('ORDER_SUBMITTED', (string) $table['Token']);
 
         return [
             'SessionID' => $sid,
@@ -225,6 +227,7 @@ class OrderService
                 $this->markPaymentPending($table);
             }
             $this->audit('CUSTOMER', 'CALL_'.$type, 'Table', (string) $table['TableID'], []);
+            OpsEvent::dispatch('CALL_'.$type, (string) $table['Token']);
 
             return ['call' => $this->publicRow($call), 'duplicate' => false];
         });

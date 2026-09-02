@@ -2,6 +2,7 @@
 
 namespace App\Pos\Services;
 
+use App\Events\OpsEvent;
 use App\Pos\Sheets\SheetRepository;
 use App\Pos\Support\AppError;
 
@@ -96,8 +97,23 @@ class OpsService
             'KitchenNote' => (string) ($input['kitchenNote'] ?? $item['KitchenNote'] ?? ''),
             'UpdatedAt' => nowIso(),
         ]);
+        OpsEvent::dispatch('ITEM_STATUS', $this->tableTokenForSession((string) $item['SessionID']));
 
         return $this->publicRow($updated);
+    }
+
+    /** Resolves the table token for a session so events can reach that customer. */
+    private function tableTokenForSession(string $sessionId): string
+    {
+        $session = collect($this->repo->all('OrderSessions'))
+            ->first(fn ($s) => (string) $s['SessionID'] === $sessionId);
+        if (! $session) {
+            return '';
+        }
+        $table = collect($this->repo->all('Tables'))
+            ->first(fn ($t) => (string) $t['TableID'] === (string) $session['TableID']);
+
+        return $table ? (string) $table['Token'] : '';
     }
 
     /** Ports updateCallStatus (Admin.js:174). */
@@ -119,6 +135,7 @@ class OpsService
             $patch['CompletedAt'] = nowIso();
         }
         $updated = $this->repo->update('CallLogs', 'LogID', (string) $call['LogID'], $patch);
+        OpsEvent::dispatch('CALL_STATUS'); // staff-side only
 
         return $this->publicRow($updated);
     }

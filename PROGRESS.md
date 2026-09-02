@@ -36,8 +36,9 @@ Branch: `feature/laravel-backend`. Models per `AGENTS.md §4.5`.
 | Epic | งาน | สถานะ |
 |---|---|---|
 | E3 | Drive image upload | ✅ ImageUploadService (magic-byte mime check, ≤7MB, Drive multipart + anyone-reader) + POST /admin/upload-image (throttle 20/1) + 3 tests |
+| E1 | Reverb realtime | ✅ OpsEvent (ShouldBroadcastNow) fired from Order/Ops/Payment after each write → `pos-ops` + `pos-table.{token}`; 3 tests; E2E verified (submit → kitchen updates in ~3s, well under the 30s live-poll fallback) |
 | E5 | MySQL mirror | ⏭️ skipped per plan — Redis micro-cache handles load; only build if real 429s appear |
 
-Do NOT start remaining unless told. E1 Reverb realtime, E4 PDF (frontend repo).
+Do NOT start remaining unless told. E4 PDF is in the frontend repo (done).
 
 **Build order**: finish Phase 2 → Phase 3 → Phase 5 epics as requested.
