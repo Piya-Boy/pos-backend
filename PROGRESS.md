@@ -29,7 +29,7 @@ Branch: `feature/laravel-backend`. Models per `AGENTS.md §4.5`.
 ## Phase 3 — Integration (backend side) · plan `plan-integ.md`
 | Task | งาน | Model | สถานะ |
 |---|---|---|---|
-| P3-T3 | CORS origin restrict + serve config | terra | ⬜ |
+| P3-T3 | CORS origin restrict + serve config | terra | ✅ multi-origin CORS from POS_FRONTEND_ORIGIN + DEPLOY.md (nginx api+web, SPA fallback, prod env, checklist) |
 | P3-T4 | E2E smoke (with frontend) | terra | ✅ full flow verified in Chrome vs live Sheets: customer order → kitchen NEW→COOKING → cashier close+receipt |
 
 ## Phase 5 — Enhancements (opt-in) · plan `plan-enhance.md`
