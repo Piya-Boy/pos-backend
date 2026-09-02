@@ -1,0 +1,28 @@
+app/Pos/Services/ImageUploadService.php
+  s_ac235bdd8b9dc7::t_a9cd96d6723802 1-117
+app/Http/Controllers/Api/AdminController.php
+  s_ac235bdd8b9dc7::t_c1986c9d58b6b8 6,17
+  s_ac235bdd8b9dc7::t_8ac6c3fb7ddcb4 57-61
+routes/api.php
+  s_ac235bdd8b9dc7::t_90e50de2e2c837 36
+tests/Feature/ImageUploadServiceTest.php
+  s_ac235bdd8b9dc7::t_feda4d15073901 1-54
+PROGRESS.md
+  s_ac235bdd8b9dc7::t_8f54d97cc382a0 36-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "b2805b7fe8f1d8b96f1a4d0c38659d1d4198de1b",
+  "prompts": {},
+  "sessions": {
+    "s_ac235bdd8b9dc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0ee4f32-2778-42a1-bf1d-2bd3d8ba1620",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Piya Miang-lae <piyaboy097@gmail.com>"
+    }
+  }
+}
