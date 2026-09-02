@@ -1,0 +1,50 @@
+app/Pos/Services/OpsService.php
+  s_ac235bdd8b9dc7::t_cc80ce39bf385b 100,105-116
+  s_ac235bdd8b9dc7::t_50331ec5d59fbe 5
+  s_ac235bdd8b9dc7::t_7cad60bfefcd35 138
+  s_ac235bdd8b9dc7::t_f39928cf072cb3 117-118
+composer.json
+  s_ac235bdd8b9dc7::t_7629e2b1c01844 15,95
+config/reverb.php
+  s_ac235bdd8b9dc7::t_7520174b0d4730 1-102
+config/broadcasting.php
+  s_ac235bdd8b9dc7::t_7520174b0d4730 1-82
+app/Pos/Services/OrderService.php
+  s_ac235bdd8b9dc7::t_23551558104a47 5
+  s_ac235bdd8b9dc7::t_3a983d06bb325a 230
+  s_ac235bdd8b9dc7::t_6c9482fba878db 158
+routes/channels.php
+  s_ac235bdd8b9dc7::t_7520174b0d4730 1-7
+bootstrap/app.php
+  s_ac235bdd8b9dc7::t_7520174b0d4730 15
+app/Events/OpsEvent.php
+  s_ac235bdd8b9dc7::t_e825903860ec8d 1-55
+tests/Feature/OpsEventTest.php
+  s_ac235bdd8b9dc7::t_ed751827149369 1-49
+app/Pos/Services/PaymentService.php
+  s_ac235bdd8b9dc7::t_8042e48413be0f 99
+  s_ac235bdd8b9dc7::t_6eb5e9989b87b7 5
+PROGRESS.md
+  s_ac235bdd8b9dc7::t_06215d49630e93 39,42
+DEPLOY.md
+  s_ac235bdd8b9dc7::t_20296d51e2ed2e 83-112
+  s_ac235bdd8b9dc7::t_2e5aab8a3cc894 122-126,128
+composer.lock
+  s_ac235bdd8b9dc7::t_9d76d75c640e66 7,138-267,641-687,1585-1663,3489-3551,3750-4338
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "6ca29045607467e72c992c39a2afb3c3413c6bd9",
+  "prompts": {},
+  "sessions": {
+    "s_ac235bdd8b9dc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0ee4f32-2778-42a1-bf1d-2bd3d8ba1620",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Piya Miang-lae <piyaboy097@gmail.com>"
+    }
+  }
+}
