@@ -1,0 +1,23 @@
+config/cors.php
+  s_ac235bdd8b9dc7::t_91fa70489f8340 3-9,14
+PROGRESS.md
+  s_ac235bdd8b9dc7::t_14a97a0350470c 32
+DEPLOY.md
+  s_ac235bdd8b9dc7::t_eace731d70d0df 1-138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "ff5cb68400c25e657a48bdfdf5f1bd96879957f9",
+  "prompts": {},
+  "sessions": {
+    "s_ac235bdd8b9dc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0ee4f32-2778-42a1-bf1d-2bd3d8ba1620",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Piya Miang-lae <piyaboy097@gmail.com>"
+    }
+  }
+}
