@@ -1,0 +1,43 @@
+app/Http/Controllers/Api/AdminController.php
+  s_ac235bdd8b9dc7::t_e175a0842eeea6 49-50
+  s_ac235bdd8b9dc7::t_b966421432b18d 11
+  s_ac235bdd8b9dc7::t_ba0dddddf182aa 40
+  s_ac235bdd8b9dc7::t_bcda5468e0a008 56
+app/Http/Middleware/StaffAuth.php
+  s_ac235bdd8b9dc7::t_7db9d31d50b6a4 9-10
+  s_ac235bdd8b9dc7::t_9647c00db5e1a1 19
+app/Pos/Support/Helpers.php
+  s_ac235bdd8b9dc7::t_b84502cdadcffd 73-82
+  s_ac235bdd8b9dc7::t_c900f412cd9be0 29-31
+  s_ac235bdd8b9dc7::t_735f56e2bfdaaa 43-48
+tests/Feature/FuzzInputTest.php
+  s_ac235bdd8b9dc7::t_71ecceffaa93f3 1-51
+app/Http/Controllers/Api/AuthController.php
+  s_ac235bdd8b9dc7::t_f1f4b868475d51 18-19
+  s_ac235bdd8b9dc7::t_024f18bb9d1ca1 25,30,32
+  s_ac235bdd8b9dc7::t_8188f90a6fb833 9
+app/Http/Controllers/Api/CustomerController.php
+  s_ac235bdd8b9dc7::t_d133840b6178c5 23,34,45
+  s_ac235bdd8b9dc7::t_2cd4eae91f287f 46
+  s_ac235bdd8b9dc7::t_b540ca0959d2f6 11
+bootstrap/app.php
+  s_ac235bdd8b9dc7::t_c1d01072c95a60 8
+  s_ac235bdd8b9dc7::t_37811a35231c33 39-42,44-49
+  s_ac235bdd8b9dc7::t_4bf12a5dd7466c 43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.0",
+  "base_commit_sha": "f0603b71995a1d57470ca67b805e658a874e4909",
+  "prompts": {},
+  "sessions": {
+    "s_ac235bdd8b9dc7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a0ee4f32-2778-42a1-bf1d-2bd3d8ba1620",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Piya Miang-lae <piyaboy097@gmail.com>"
+    }
+  }
+}
