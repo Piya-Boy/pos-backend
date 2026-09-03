@@ -8,6 +8,7 @@ use App\Pos\Services\SettingsService;
 use Illuminate\Http\Request;
 
 use function App\Pos\Support\apiOk;
+use function App\Pos\Support\strInput;
 
 class AdminController
 {
@@ -36,7 +37,7 @@ class AdminController
     {
         return response()->json(apiOk($this->admin->saveEntity(
             $this->user($r),
-            (string) $r->input('entity', ''),
+            strInput($r->input('entity')),
             (array) $r->input('data', []),
         )));
     }
@@ -45,14 +46,14 @@ class AdminController
     {
         return response()->json(apiOk($this->admin->archiveEntity(
             $this->user($r),
-            (string) $r->input('entity', ''),
-            (string) $r->input('id', ''),
+            strInput($r->input('entity')),
+            strInput($r->input('id')),
         )));
     }
 
     public function rotateToken(Request $r)
     {
-        return response()->json(apiOk($this->admin->rotateToken($this->user($r), (string) $r->input('tableId', ''))));
+        return response()->json(apiOk($this->admin->rotateToken($this->user($r), strInput($r->input('tableId')))));
     }
 
     public function uploadImage(Request $r)

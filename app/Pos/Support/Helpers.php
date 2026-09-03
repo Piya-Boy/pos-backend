@@ -26,7 +26,9 @@ function sha256(string $v): string
 
 function normalizeText(mixed $v, int $max = 0): string
 {
-    $text = trim(str_replace(['<', '>'], '', (string) ($v ?? '')));
+    // is_scalar guard: a client can send an array/object where a string is
+    // expected; casting that directly would throw. Coerce non-scalars to ''.
+    $text = trim(str_replace(['<', '>'], '', is_scalar($v) ? (string) $v : ''));
 
     return $max > 0 ? mb_substr($text, 0, $max) : $text;
 }
@@ -38,7 +40,12 @@ function numberOr(mixed $v, float $fallback = 0): float
 
 function boolish(mixed $v): bool
 {
-    return $v === true || strtolower((string) $v) === 'true' || (string) $v === '1';
+    if (! is_scalar($v)) {
+        return false;
+    }
+    $s = (string) $v;
+
+    return $v === true || strtolower($s) === 'true' || $s === '1';
 }
 
 function nowIso(): string
@@ -62,4 +69,14 @@ function sanitizeHttpsUrl(mixed $v): string
 function apiOk(mixed $data): array
 {
     return ['ok' => true, 'data' => $data ?? null];
+}
+
+/**
+ * Coerces untrusted request input to a string. Scalars stringify; arrays,
+ * objects, and null become ''. Guards against `(string) $array` throwing a
+ * PHP "Array to string conversion" Error when a client sends the wrong type.
+ */
+function strInput(mixed $v): string
+{
+    return is_scalar($v) ? (string) $v : '';
 }

@@ -8,6 +8,7 @@ use App\Pos\Services\SettingsService;
 use Illuminate\Http\Request;
 
 use function App\Pos\Support\apiOk;
+use function App\Pos\Support\strInput;
 
 class CustomerController
 {
@@ -19,7 +20,7 @@ class CustomerController
 
     public function bootstrap(Request $r)
     {
-        $token = (string) $r->input('tableToken', '');
+        $token = strInput($r->input('tableToken'));
         $out = $this->settings->bootstrap($token);
         if ($token !== '') {
             $out['customer'] = $this->catalog->customerData($token);
@@ -30,7 +31,7 @@ class CustomerController
 
     public function customer(Request $r)
     {
-        return response()->json(apiOk($this->catalog->customerData((string) $r->input('tableToken', ''))));
+        return response()->json(apiOk($this->catalog->customerData(strInput($r->input('tableToken')))));
     }
 
     public function submit(Request $r)
@@ -41,8 +42,8 @@ class CustomerController
     public function status(Request $r)
     {
         return response()->json(apiOk($this->orders->status(
-            (string) $r->input('tableToken', ''),
-            (string) $r->input('sessionId', ''),
+            strInput($r->input('tableToken')),
+            strInput($r->input('sessionId')),
         )));
     }
 

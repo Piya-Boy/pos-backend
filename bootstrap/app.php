@@ -5,6 +5,7 @@ use App\Pos\Support\AppError;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Validation\ValidationException;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -33,6 +34,17 @@ return Application::configure(basePath: dirname(__DIR__))
             if ($e instanceof ValidationException) {
                 return response()->json(['ok' => false, 'error' => [
                     'code' => 'VALIDATION', 'message' => $e->validator->errors()->first(), 'details' => $e->errors(),
+                ]], 200);
+            }
+            // Rate limit hit: a controlled, expected outcome — do NOT report() it
+            // as a server error (that hid the throttle behind SERVER_ERROR).
+            if ($e instanceof ThrottleRequestsException) {
+                $retry = $e->getHeaders()['Retry-After'] ?? null;
+
+                return response()->json(['ok' => false, 'error' => [
+                    'code' => 'RATE_LIMITED',
+                    'message' => 'เรียกใช้งานบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่',
+                    'details' => $retry !== null ? ['retryAfter' => (int) $retry] : null,
                 ]], 200);
             }
             report($e);
